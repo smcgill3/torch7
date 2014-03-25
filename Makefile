@@ -65,6 +65,7 @@ TORCH_SOURCES= \
 	lib/TH/THStorage.c \
 	lib/TH/THTensor.c \
 	lib/luaT/luaT.c \
+  Generator.c \
 	DiskFile.c \
 	File.c \
 	MemoryFile.c \
