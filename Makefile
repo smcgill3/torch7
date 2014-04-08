@@ -32,7 +32,6 @@ TORCH_SOURCES=\
 	utils.c
 
 TORCH_OBJECTS=$(TORCH_SOURCES:.c=.o)
-TORCH_LIBRARY=libtorch
 
 CFLAGS= \
 	-std=c99 -pedantic \
@@ -56,18 +55,15 @@ ifndef OSTYPE
 endif
 
 ifeq ($(OSTYPE),darwin)
-#CC=clang
-#LD=ld
-CC=gcc
-LD=g++
+CC=clang
+LD=ld -macosx_version_min 10.8
+#CC=gcc
+#LD=g++
 SED=-i '' -e
 LDFLAGS=-undefined dynamic_lookup \
 	-framework Accelerate \
 	-lm \
 	-L/usr/local/lib \
-#	-macosx_version_min 10.6
-
-BUNDLEFLAG=-bundle
 
 CFLAGS+=-msse4.2 -DUSE_SSE4_2 \
 	-msse4.1 -DUSE_SSE4_1 \
@@ -78,7 +74,7 @@ LD=g++
 CFLAGS+=-march=native -mtune=native
 endif
 
-all: $(TORCH_SOURCES) $(TORCH_LIBRARY)
+all: $(TORCH_SOURCES) libtorch
 
 prep:
 	cp lib/TH/THGeneral.h.in lib/TH/THGeneral.h
@@ -91,8 +87,8 @@ prep:
 	$(CC) $(CFLAGS) $< -o $@
 	
 clean:
-	rm -f $(TORCH_LIBRARY) *.so
 	rm -f $(TORCH_OBJECTS)
+	rm -f *.so *.dylib
 	rm -f TensorMath.c
 	rm -f random.c
 	rm -f lib/TH/THGeneral.h
@@ -102,11 +98,12 @@ ifeq ($(OSTYPE),darwin)
 # Mach-O means BUNDLE for lua loading, DYLIB for linking (2 diff files...)
 # GCC is -dynamiclib, clang is -dylib for the DYLIB
 # lua loads .so files, dylib files are linked
-$(TORCH_LIBRARY): $(TORCH_OBJECTS) 
-	$(LD) -bundle  $^ $(LDFLAGS) -o $@.so
-	$(LD) -dynamiclib $^ $(LDFLAGS) -o $@.dylib
+libtorch: $(TORCH_OBJECTS)
+	$(LD) -bundle $^ $(LDFLAGS) -o $@.so
+#	$(LD) -dynamiclib $^ $(LDFLAGS) -o $@.dylib
+	$(LD) -dylib $^ $(LDFLAGS) -o $@.dylib
 
-install: $(TORCH_LIBRARY)
+install: libtorch
 	mkdir -p /usr/local/include/torch/TH/generic
 	cp lib/luaT/luaT.h /usr/local/include/torch/
 	cp lib/TH/*.h /usr/local/include/torch/TH/
@@ -117,10 +114,10 @@ install: $(TORCH_LIBRARY)
 
 else
 # Linux linking and installation
-$(TORCH_LIBRARY): $(TORCH_OBJECTS) 
+libtorch: $(TORCH_OBJECTS)
 	$(LD) $^ $(LDFLAGS) -o $@.so
 
-install: $(TORCH_LIBRARY)
+install: libtorch
 	mkdir -p /usr/local/include/torch/TH/generic
 	cp lib/luaT/luaT.h /usr/local/include/torch/
 	cp lib/TH/*.h /usr/local/include/torch/TH/
