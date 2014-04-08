@@ -1,7 +1,7 @@
 ## Makefile Method for making torch into a module for any lua
 ## Daniel D. Lee, Feb 2013.
 ## <ddlee@seas.upenn.edu>
-## Stephen McGill, Feb 2013
+## Stephen McGill, Apr 2014
 ## <smcgill3@seas.upenn.edu>
 
 TORCH_SOURCES=\
@@ -44,11 +44,9 @@ CFLAGS= \
 	-fomit-frame-pointer \
 	-DTH_EXPORTS -DHAVE_MMAP=1 \
 	-DUSE_SSE3 -DUSE_SSE2 -DNDEBUG \
-	-DC_HAS_THREAD -DTH_HAVE_THREAD
+	-DC_HAS_THREAD -DTH_HAVE_THREAD \
+	-march=native -mtune=native
 #-Wall -Wno-unused-function -Wno-unknown-pragmas
-
-LDFLAGS=-shared -fpic -lm -lblas -llapack
-SED=-i -e
 
 ifndef OSTYPE 
 	OSTYPE = $(shell uname -s|awk '{print tolower($$0)}')
@@ -57,34 +55,31 @@ endif
 ifeq ($(OSTYPE),darwin)
 CC=clang
 LD=ld -macosx_version_min 10.8
-#CC=gcc
-#LD=g++
-SED=-i '' -e
+SED=sed -i '' -e
 LDFLAGS=-undefined dynamic_lookup \
 	-framework Accelerate \
 	-lm \
-	-L/usr/local/lib \
-
+	-L/usr/local/lib
 CFLAGS+=-msse4.2 -DUSE_SSE4_2 \
 	-msse4.1 -DUSE_SSE4_1 \
 	-FAccelerate
 else
-CC=gcc
 LD=g++
-CFLAGS+=-march=native -mtune=native
+LDFLAGS=-shared -fpic -lm -lblas -llapack
+SED=sed -i -e
 endif
 
 all: $(TORCH_SOURCES) libtorch
 
 prep:
 	cp lib/TH/THGeneral.h.in lib/TH/THGeneral.h
-	sed $(SED) 's/cmakedefine/define/g' lib/TH/THGeneral.h
-	sed $(SED) 's/@TH_INLINE@/inline/g' lib/TH/THGeneral.h
+	$(SED) 's/cmakedefine/define/g' lib/TH/THGeneral.h
+	$(SED) 's/@TH_INLINE@/inline/g' lib/TH/THGeneral.h
 	lua -e "package.path = package.path..';ext/?/init.lua;ext/?.lua'" TensorMath.lua TensorMath.c
 	lua -e "package.path = package.path..';ext/?/init.lua;ext/?.lua'" random.lua random.c
 
 .c.o:
-	$(CC) $(CFLAGS) $< -o $@
+	cc $(CFLAGS) $< -o $@
 	
 clean:
 	rm -f $(TORCH_OBJECTS)
@@ -98,9 +93,9 @@ ifeq ($(OSTYPE),darwin)
 # Mach-O means BUNDLE for lua loading, DYLIB for linking (2 diff files...)
 # GCC is -dynamiclib, clang is -dylib for the DYLIB
 # lua loads .so files, dylib files are linked
+
 libtorch: $(TORCH_OBJECTS)
 	$(LD) -bundle $^ $(LDFLAGS) -o $@.so
-#	$(LD) -dynamiclib $^ $(LDFLAGS) -o $@.dylib
 	$(LD) -dylib $^ $(LDFLAGS) -o $@.dylib
 
 install: libtorch
@@ -114,6 +109,7 @@ install: libtorch
 
 else
 # Linux linking and installation
+
 libtorch: $(TORCH_OBJECTS)
 	$(LD) $^ $(LDFLAGS) -o $@.so
 
