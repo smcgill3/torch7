@@ -1,5 +1,6 @@
 *.o
 *.so
+*.dylib
 build
 TensorMath.c
 random.c

@@ -4,56 +4,7 @@
 ## Stephen McGill, Feb 2013
 ## <smcgill3@seas.upenn.edu>
 
-CC=gcc
-CXX=g++
-LD=g++
-# GCC is dynamiclib, clang is dylib
-DYNAMICFLAG=-dynamiclib
-#DYNAMICFLAG=-dylib
-BUNDLEFLAG=
-
-ifndef OSTYPE 
-	OSTYPE = $(shell uname -s|awk '{print tolower($$0)}')
-endif
-
-CPPFLAGS= \
-	-std=c99 -pedantic \
-	-c \
-	-I/usr/local/include \
-	-I/usr/include/lua5.1 \
-	-Ilib/luaT -Ilib/TH -I. \
-	-O3 -fpic\
-	-fno-stack-protector \
-	-fomit-frame-pointer \
-	-DTH_EXPORTS -DHAVE_MMAP=1 \
-	-DUSE_SSE3 -DUSE_SSE2 -DNDEBUG \
-	-DC_HAS_THREAD -DTH_HAVE_THREAD
-#-Wall -Wno-unused-function -Wno-unknown-pragmas
-
-LDFLAGS= \
-	-shared -fpic -lm -lblas -llapack
-#	-fomit-frame-pointer
-SED=-i -e
-
-ifeq ($(OSTYPE),darwin)
-SED=-i '' -e
-LDFLAGS=-undefined dynamic_lookup \
-	-framework Accelerate \
-	-lm \
-	-L/usr/local/lib \
-#	-macosx_version_min 10.6
-
-BUNDLEFLAG=-bundle
-
-CPPFLAGS+=-msse4.2 -DUSE_SSE4_2 \
-	-msse4.1 -DUSE_SSE4_1 \
-	-FAccelerate
-
-else
-CPPFLAGS+=-march=native -mtune=native 
-endif
-
-TORCH_SOURCES= \
+TORCH_SOURCES=\
 	lib/TH/THBlas.c \
 	lib/TH/THDiskFile.c \
 	lib/TH/THFile.c \
@@ -64,6 +15,7 @@ TORCH_SOURCES= \
 	lib/TH/THRandom.c \
 	lib/TH/THStorage.c \
 	lib/TH/THTensor.c \
+	lib/TH/THAllocator.c \
 	lib/luaT/luaT.c \
   Generator.c \
 	DiskFile.c \
@@ -80,7 +32,51 @@ TORCH_SOURCES= \
 	utils.c
 
 TORCH_OBJECTS=$(TORCH_SOURCES:.c=.o)
-TORCH_LIBRARY=torch.so
+TORCH_LIBRARY=libtorch
+
+CFLAGS= \
+	-std=c99 -pedantic \
+	-c \
+	-I/usr/local/include \
+	-I/usr/include/lua5.1 \
+	-Ilib/luaT -Ilib/TH -I. \
+	-O3 -fpic\
+	-fno-stack-protector \
+	-fomit-frame-pointer \
+	-DTH_EXPORTS -DHAVE_MMAP=1 \
+	-DUSE_SSE3 -DUSE_SSE2 -DNDEBUG \
+	-DC_HAS_THREAD -DTH_HAVE_THREAD
+#-Wall -Wno-unused-function -Wno-unknown-pragmas
+
+LDFLAGS=-shared -fpic -lm -lblas -llapack
+SED=-i -e
+
+ifndef OSTYPE 
+	OSTYPE = $(shell uname -s|awk '{print tolower($$0)}')
+endif
+
+ifeq ($(OSTYPE),darwin)
+#CC=clang
+#LD=ld
+CC=gcc
+LD=g++
+SED=-i '' -e
+LDFLAGS=-undefined dynamic_lookup \
+	-framework Accelerate \
+	-lm \
+	-L/usr/local/lib \
+#	-macosx_version_min 10.6
+
+BUNDLEFLAG=-bundle
+
+CFLAGS+=-msse4.2 -DUSE_SSE4_2 \
+	-msse4.1 -DUSE_SSE4_1 \
+	-FAccelerate
+else
+CC=gcc
+LD=g++
+CFLAGS+=-march=native -mtune=native
+endif
 
 all: $(TORCH_SOURCES) $(TORCH_LIBRARY)
 
@@ -88,30 +84,48 @@ prep:
 	cp lib/TH/THGeneral.h.in lib/TH/THGeneral.h
 	sed $(SED) 's/cmakedefine/define/g' lib/TH/THGeneral.h
 	sed $(SED) 's/@TH_INLINE@/inline/g' lib/TH/THGeneral.h
-	sed $(SED) 's/luaopen_libtorch/luaopen_torch/g' init.c
 	lua -e "package.path = package.path..';ext/?/init.lua;ext/?.lua'" TensorMath.lua TensorMath.c
 	lua -e "package.path = package.path..';ext/?/init.lua;ext/?.lua'" random.lua random.c
 
-$(TORCH_LIBRARY): $(TORCH_OBJECTS) 
-	$(LD) $(BUNDLEFLAG)  $^ $(LDFLAGS) -o $@
-	$(LD) $(DYNAMICFLAG) $^ $(LDFLAGS) -o lib$@
-
 .c.o:
-	$(CC) $(CPPFLAGS) $< -o $@
-
-install: $(TORCH_LIBRARY)
-	cp lib*.so /usr/local/lib
-	mkdir -p /usr/local/include/torch/TH/generic
-	cp lib/luaT/luaT.h /usr/local/include/torch/
-	cp lib/TH/*.h /usr/local/include/torch/TH/
-	cp lib/TH/generic/* /usr/local/include/torch/TH/generic/
-	mkdir -p /usr/local/lib/lua/5.1
-	cp torch.so /usr/local/lib/lua/5.1/
-
+	$(CC) $(CFLAGS) $< -o $@
+	
 clean:
 	rm -f $(TORCH_LIBRARY) *.so
 	rm -f $(TORCH_OBJECTS)
 	rm -f TensorMath.c
 	rm -f random.c
 	rm -f lib/TH/THGeneral.h
-	sed $(SED) 's/luaopen_torch/luaopen_libtorch/g' init.c
+
+ifeq ($(OSTYPE),darwin)
+# OSX linking and installation
+# Mach-O means BUNDLE for lua loading, DYLIB for linking (2 diff files...)
+# GCC is -dynamiclib, clang is -dylib for the DYLIB
+# lua loads .so files, dylib files are linked
+$(TORCH_LIBRARY): $(TORCH_OBJECTS) 
+	$(LD) -bundle  $^ $(LDFLAGS) -o $@.so
+	$(LD) -dynamiclib $^ $(LDFLAGS) -o $@.dylib
+
+install: $(TORCH_LIBRARY)
+	mkdir -p /usr/local/include/torch/TH/generic
+	cp lib/luaT/luaT.h /usr/local/include/torch/
+	cp lib/TH/*.h /usr/local/include/torch/TH/
+	cp lib/TH/generic/* /usr/local/include/torch/TH/generic/
+	mkdir -p /usr/local/lib/lua/5.1
+	cp *.so /usr/local/lib/lua/5.1/
+	cp *.dylib /usr/local/lib/
+
+else
+# Linux linking and installation
+$(TORCH_LIBRARY): $(TORCH_OBJECTS) 
+	$(LD) $^ $(LDFLAGS) -o $@.so
+
+install: $(TORCH_LIBRARY)
+	mkdir -p /usr/local/include/torch/TH/generic
+	cp lib/luaT/luaT.h /usr/local/include/torch/
+	cp lib/TH/*.h /usr/local/include/torch/TH/
+	cp lib/TH/generic/* /usr/local/include/torch/TH/generic/
+	mkdir -p /usr/local/lib/lua/5.1
+	cp *.so /usr/local/lib/lua/5.1/
+	cp *.so /usr/local/lib/
+endif
