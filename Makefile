@@ -37,6 +37,7 @@ CFLAGS= \
 	-std=c99 -pedantic \
 	-c \
 	-I/usr/local/include \
+	-I/usr/include/lua \
 	-I/usr/include/lua5.1 \
 	-Ilib/luaT -Ilib/TH -I. \
 	-O3 -fpic\
@@ -65,7 +66,8 @@ CFLAGS+=-msse4.2 -DUSE_SSE4_2 \
 	-FAccelerate
 else
 LD=g++
-LDFLAGS=-shared -fpic -lm -lblas -llapack
+#LDFLAGS=-shared -fpic -lm -lblas -llapack
+LDFLAGS=-shared -fpic -lm -lopenblas
 SED=sed -i -e
 endif
 
