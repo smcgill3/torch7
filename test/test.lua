@@ -631,6 +631,43 @@ function torchtest.eye()
    torch.eye(mxx,msize,msize)
    mytester:asserteq(maxdiff(mx,mxx),0,'torch.eye value')
 end
+function torchtest.renorm()
+   local m1 = torch.randn(10,5)
+   local res1 = torch.Tensor()
+
+   local function renorm(matrix, value, dim, max_norm)
+      local m1 = matrix:transpose(dim, 1):contiguous()
+      -- collapse non-dim dimensions:
+      m2 = m1:reshape(m1:size(1), m1:nElement()/m1:size(1))
+      local norms = m2:norm(value,2)
+      -- clip
+      local new_norms = norms:clone()
+      new_norms[torch.gt(norms, max_norm)] = max_norm
+      new_norms:cdiv(norms:add(1e-7))
+      -- renormalize
+      m1:cmul(new_norms:expandAs(m1))
+      return m1:transpose(dim, 1)
+   end
+   
+   -- note that the axis fed to torch.renorm is different (2~=1)
+   local maxnorm = m1:norm(2,1):mean()
+   local m2 = renorm(m1,2,2,maxnorm)
+   
+   m1:renorm(2,2,maxnorm)
+   mytester:assertTensorEq(m1, m2, 0.00001)
+   mytester:assertTensorEq(m1:norm(2,1), m2:norm(2,1), 0.00001)
+   
+   m1 = torch.randn(3,4,5)
+   m2 = m1:transpose(2,3):contiguous():reshape(15,4)
+   
+   maxnorm = m2:norm(2,1):mean()
+   m2 = renorm(m2,2,2,maxnorm)
+   
+   m1:renorm(2,2,maxnorm)
+   m3 = m1:transpose(2,3):contiguous():reshape(15,4)
+   mytester:assertTensorEq(m3, m2, 0.00001)
+   mytester:assertTensorEq(m3:norm(2,1), m2:norm(2,1), 0.00001)
+end
 function torchtest.multinomialwithreplacement()
    local n_row = 3
    for n_col=4,5 do
@@ -1223,6 +1260,20 @@ function torchtest.RNGState()
    mytester:assertTensorEq(before, after, 1e-16, 'getRNGState/setRNGState not generating same sequence')
 end
 
+function torchtest.testBoxMullerState()
+    torch.manualSeed(123)
+    local odd_number = 101
+    local seeded = torch.randn(odd_number)
+    local state = torch.getRNGState()
+    local midstream = torch.randn(odd_number)
+    torch.setRNGState(state)
+    local repeat_midstream = torch.randn(odd_number)
+    torch.manualSeed(123)
+    local reseeded = torch.randn(odd_number)
+    mytester:assertTensorEq(midstream, repeat_midstream, 1e-16, 'getRNGState/setRNGState not generating same sequence of normally distributed numbers')
+    mytester:assertTensorEq(seeded, reseeded, 1e-16, 'repeated calls to manualSeed not generating same sequence of normally distributed numbers')
+end
+
 function torchtest.testCholesky()
     local x = torch.rand(10,10)
     local A = torch.mm(x, x:t())
@@ -1230,13 +1281,7 @@ function torchtest.testCholesky()
     local B = torch.mm(C:t(), C)
     mytester:assertTensorEq(A, B, 1e-14, 'potrf did not allow rebuilding the original matrix')
 end
-function torchtest.testCholeskyErrsOnRankDeficient()
-    local x = torch.rand(5,5)
-    local A = torch.mm(x, x:t())
-    -- Make the matrix rank-defficient
-    A[{{},5}]:copy(A[{{},{1}}])
-    mytester:assertError(function() torch.potrf(A) end)
-end
+
 function torchtest.testNumel()
     local b = torch.ByteTensor(3, 100, 100)
     mytester:asserteq(b:nElement(), 3*100*100, "nElement not right")
