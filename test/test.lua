@@ -1072,7 +1072,7 @@ function torchtest.conv3()
    mytester:asserteq(maxdiff(imvc,imvx),0,'torch.conv3')
    mytester:asserteq(maxdiff(imvc,imvx2),0,'torch.conv3')
    mytester:asserteq(maxdiff(imfc,imfx),0,'torch.conv3')
-   mytester:assertlt(math.abs(x:dot(x)-torch.xcorr3(x,x)[1][1][1]),1e-10,'torch.conv3')
+   mytester:assertlt(math.abs(x:dot(x)-torch.xcorr3(x,x)[1][1][1]),4*1e-10,'torch.conv3')
 
    local xx = torch.Tensor(2,x:size(1),x:size(2),x:size(3))
    xx[1]:copy(x)
@@ -1253,11 +1253,26 @@ function torchtest.RNGState()
    local stateCloned = state:clone()
    local before = torch.rand(1000)
 
-   mytester:assert(state:ne(stateCloned):long():sum() == 0, 'RNG (supposedly cloned) state has changed after random number generation')
+   mytester:assert(state:ne(stateCloned):long():sum() == 0, 'getRNGState should have value semantics, but appears to have reference semantics')
 
    torch.setRNGState(state)
    local after = torch.rand(1000)
    mytester:assertTensorEq(before, after, 1e-16, 'getRNGState/setRNGState not generating same sequence')
+end
+
+function torchtest.RNGStateAliasing()
+    torch.manualSeed(1)
+    local unused = torch.uniform()
+
+    -- Fork the random number stream at this point
+    local gen = torch.Generator()
+    torch.setRNGState(gen, torch.getRNGState())
+
+    local target_value = torch.rand(1000)
+    --Dramatically alter the internal state of the main generator
+    local also_unused = torch.rand(100000)
+    local forked_value = torch.rand(gen, 1000)
+    mytester:assertTensorEq(target_value, forked_value, 1e-16, "RNG has not forked correctly.")
 end
 
 function torchtest.testBoxMullerState()
@@ -1378,6 +1393,17 @@ end
 function torchtest.classNoModule()
     local x = torch.class('_myclass123')
     mytester:assert(x, 'Could not create class in module')
+end
+
+function torchtest.view()
+   local tensor = torch.rand(15)
+   local template = torch.rand(3,5)
+   local target = template:size():totable()
+   mytester:assertTableEq(tensor:viewAs(template):size():totable(), target, 'Error in viewAs')
+   mytester:assertTableEq(tensor:view(3,5):size():totable(), target, 'Error in view')
+   mytester:assertTableEq(tensor:view(torch.LongStorage{3,5}):size():totable(), target, 'Error in view using LongStorage')
+   mytester:assertTableEq(tensor:view(-1,5):size():totable(), target, 'Error in view using dimension -1')
+   mytester:assertTableEq(tensor:view(3,-1):size():totable(), target, 'Error in view using dimension -1')
 end
 
 function torch.test(tests)
