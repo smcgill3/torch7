@@ -1,5 +1,12 @@
 
 -- We are using paths.require to appease mkl
+
+-- Make this work with LuaJIT in Lua 5.2 compatibility mode, which
+-- renames string.gfind (already deprecated in 5.1)
+if not string.gfind then
+    string.gfind = string.gmatch
+end
+
 require "paths"
 paths.require "libtorch"
 
@@ -67,6 +74,14 @@ function torch.setdefaulttensortype(typename)
    else
       error(string.format("<%s> is not a string describing a torch object", typename))
    end
+end
+
+function torch.type(obj)
+   local class = torch.typename(obj)
+   if not class then
+      class = type(obj)
+   end
+   return class
 end
 
 torch.setdefaulttensortype('torch.DoubleTensor')

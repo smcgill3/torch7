@@ -1395,6 +1395,14 @@ function torchtest.classNoModule()
     mytester:assert(x, 'Could not create class in module')
 end
 
+function torchtest.type()
+   local objects = {torch.DoubleTensor(), {}, nil, 2, "asdf"}
+   local types = {'torch.DoubleTensor', 'table', 'nil', 'number', 'string'}
+   for i,obj in ipairs(objects) do
+      mytester:assert(torch.type(obj) == types[i], "wrong type "..types[i])
+   end
+end
+
 function torchtest.view()
    local tensor = torch.rand(15)
    local template = torch.rand(3,5)
@@ -1416,6 +1424,17 @@ function torchtest.view()
    mytester:assertTableEq(target_tensor:view(tensor, 3,-1):size():totable(), target, 'Error in view using dimension -1')
    target_tensor:fill(torch.rand(1)[1])
    mytester:asserteq((target_tensor-tensor):abs():max(), 0, 'Error in viewAs')
+end
+
+function torchtest.isSameSizeAs()
+   local t1 = torch.Tensor(3, 4, 9, 10)
+   local t2 = torch.Tensor(3, 4)
+   local t3 = torch.Tensor(1, 9, 3, 3)
+   local t4 = torch.Tensor(3, 4, 9, 10)
+
+   mytester:assert(t1:isSameSizeAs(t2) == false, "wrong answer ")
+   mytester:assert(t1:isSameSizeAs(t3) == false, "wrong answer ")
+   mytester:assert(t1:isSameSizeAs(t4) == true, "wrong answer ")
 end
 
 function torch.test(tests)
