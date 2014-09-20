@@ -137,7 +137,7 @@ is below the main diagonal.
 
 `y=torch.eye(n)` returns the n-by-n identity matrix.
 
-`y=torch.eye(n,m)` returns an m-by-m identity matrix with ones on the diagonal and zeros elsewhere.
+`y=torch.eye(n,m)` returns an n-by-m identity matrix with ones on the diagonal and zeros elsewhere.
 
 
 <a name="torch.linspace"/>
@@ -1384,6 +1384,8 @@ vectors) of ` A ` such that ` A = V' diag(e) V `.
 Third argument defines computation of eigenvectors or eigenvalues
 only. If ` N `, only eignevalues are computed. If ` V `, both
 eigenvalues and eigenvectors are computed.
+
+The eigen values returned follow [LAPACK convention](https://software.intel.com/sites/products/documentation/hpc/mkl/mklman/GUID-16EB5901-5644-4DA6-A332-A052309010C4.htm) and are returned as complex (real/imaginary) pairs of numbers (Nx2 dimensional tensor).
 
 ```lua
 
