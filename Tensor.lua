@@ -274,13 +274,20 @@ function Tensor.real(self)
    return self:type(torch.getdefaulttensortype())
 end
 
-function Tensor.expand(tensor,...)
+function Tensor.expand(result,tensor,...)
    -- get sizes
    local sizes = {...}
+   
+   local t = torch.type(tensor)
+   if (t == 'number' or t == 'torch.LongStorage') then
+      table.insert(sizes,1,tensor)
+      tensor = result
+      result = tensor.new()
+   end
 
    -- check type
    local size
-   if torch.typename(sizes[1]) and torch.typename(sizes[1])=='torch.LongStorage' then
+   if torch.type(sizes[1])=='torch.LongStorage' then
       size = sizes[1]
    else
       size = torch.LongStorage(#sizes)
@@ -310,24 +317,36 @@ function Tensor.expand(tensor,...)
    end
 
    -- create new view, with singleton expansion:
-   tensor = tensor.new(tensor:storage(), tensor:storageOffset(),
+   result:set(tensor:storage(), tensor:storageOffset(),
                          tensor_size, tensor_stride)
-   return tensor
+   return result
 end
 torch.expand = Tensor.expand
 
-function Tensor.expandAs(tensor,template)
-   return tensor:expand(template:size())
+function Tensor.expandAs(result,tensor,template)
+   if template then
+      return result:expand(tensor,template:size())
+   end
+   return result:expand(tensor:size())
 end
 torch.expandAs = Tensor.expandAs
 
-function Tensor.repeatTensor(tensor,...)
+function Tensor.repeatTensor(result,tensor,...)
    -- get sizes
    local sizes = {...}
+   
+   local t = torch.type(tensor)
+   if (t == 'number' or t == 'torch.LongStorage') then
+      table.insert(sizes,1,tensor)
+      tensor = result
+      result = tensor.new()
+   end
+   -- if not contiguous, then force the tensor to be contiguous
+   if not tensor:isContiguous() then tensor = tensor:clone() end
 
    -- check type
    local size
-   if torch.typename(sizes[1]) and torch.typename(sizes[1])=='torch.LongStorage' then
+   if torch.type(sizes[1])=='torch.LongStorage' then
       size = sizes[1]
    else
       size = torch.LongStorage(#sizes)
@@ -345,8 +364,8 @@ function Tensor.repeatTensor(tensor,...)
    end
    size = torch.DoubleTensor(xsize):cmul(torch.DoubleTensor(size:totable())):long():storage()
    xtensor:resize(torch.LongStorage(xsize))
-   local rtensor = tensor.new():resize(size)
-   local urtensor = rtensor.new(rtensor)
+   result:resize(size)
+   local urtensor = result.new(result)
    for i=1,xtensor:dim() do
       urtensor = urtensor:unfold(i,xtensor:size(i),xtensor:size(i))
    end
@@ -356,7 +375,7 @@ function Tensor.repeatTensor(tensor,...)
    xtensor:resize(torch.LongStorage(xsize))
    local xxtensor = xtensor:expandAs(urtensor)
    urtensor:copy(xxtensor)
-   return rtensor
+   return result
 end
 torch.repeatTensor = Tensor.repeatTensor
 
@@ -455,6 +474,44 @@ function Tensor.viewAs(result, src, template)
    end
 end
 torch.viewAs = Tensor.viewAs
+
+function Tensor.split(result, tensor, splitSize, dim)
+   if torch.type(result) ~= 'table' then
+      dim = splitSize
+      splitSize = tensor
+      tensor = result
+      result = {}
+   else
+      -- empty existing result table before using it
+      for k,v in pairs(result) do
+         result[k] = nil
+      end
+   end
+   dim = dim or 1
+   local splits = {}
+   local start = 1
+   while start <= tensor:size(dim) do
+      local size = math.min(splitSize, tensor:size(dim) - start + 1)
+      local split = tensor:narrow(dim, start, size)
+      table.insert(splits, split)
+      start = start + size
+   end
+   return splits
+end
+torch.split = Tensor.split
+
+function Tensor.chunk(result, tensor, nChunk, dim)
+   if torch.type(result) ~= 'table' then
+      dim = nChunk
+      nChunk = tensor
+      tensor = result
+      result = {}
+   end
+   dim = dim or 1
+   local splitSize = math.ceil(tensor:size(dim)/nChunk)
+   return torch.split(result, tensor, splitSize, dim)
+end
+torch.chunk = Tensor.chunk
 
 for _,type in ipairs(types) do
    local metatable = torch.getmetatable('torch.' .. type .. 'Tensor')

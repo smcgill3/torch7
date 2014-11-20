@@ -595,8 +595,46 @@ int luaT_lua_newmetatable(lua_State *L)
   return 1; /* returns the metatable */
 }
 
-
 /* Lua only utility functions */
+
+/* add any custom type, provided the object has a metatable */
+int luaT_lua_metatype(lua_State *L)
+{
+  luaL_checkstring(L, 1);
+  luaL_checktype(L, 2, LUA_TTABLE);
+
+  /* registry[name] = metatable */
+  lua_pushvalue(L, 1);
+  lua_pushvalue(L, 2);
+  lua_rawset(L, LUA_REGISTRYINDEX);
+
+  /* registry[metatable] = tname */
+  lua_pushvalue(L, 2);
+  lua_pushvalue(L, 1);
+  lua_rawset(L, LUA_REGISTRYINDEX);
+
+  return 0;
+}
+
+/* return a userdata from a C pointer */
+/* you are better to know what you are doing */
+int luaT_lua_pushudata(lua_State *L)
+{
+  void *udata;
+  const char *tname = luaL_checkstring(L, 2);
+
+  if(lua_type(L, 1) == 10)
+    udata = *((void**)lua_topointer(L, 1));
+  else if(lua_isnumber(L, 1))
+    udata = (void*)(long)lua_tonumber(L, 1);
+  else
+    luaL_argerror(L, 1, "expecting number or cdata");
+
+  luaT_pushudata(L, udata, tname);
+
+  return 1;
+}
+
 int luaT_lua_factory(lua_State *L)
 {
   const char* tname = luaL_checkstring(L, 1);
@@ -675,8 +713,22 @@ int luaT_lua_pointer(lua_State *L)
     lua_pushnumber(L, (long)(ptr));
     return 1;
   }
+  else if(lua_type(L, 1) == 10) /* cdata */
+  {
+    /* we want the pointer holded by cdata */
+    /* not the pointer on the cdata object */
+    const void* ptr = *((void**)lua_topointer(L, 1));
+    lua_pushnumber(L, (long)(ptr));
+    return 1;
+  }
+  else if(lua_isstring(L, 1))
+  {
+    const char* ptr = lua_tostring(L, 1);
+    lua_pushnumber(L, (long)(ptr));
+    return 1;
+  }
   else
-    luaL_error(L, "Torch object, table, thread or function expected");
+    luaL_error(L, "Torch object, table, thread, cdata or function expected");
 
   return 0;
 }

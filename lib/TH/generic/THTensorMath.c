@@ -211,6 +211,13 @@ accreal THTensor_(sumall)(THTensor *tensor)
   return sum;
 }
 
+accreal THTensor_(prodall)(THTensor *tensor)
+{
+  accreal prod = 1;
+  TH_TENSOR_APPLY(real, tensor, prod *= *tensor_data;);
+  return prod;
+}
+
 void THTensor_(add)(THTensor *r_, THTensor *t, real value)
 {
   THTensor_(resizeAs)(r_, t);
@@ -256,6 +263,23 @@ void THTensor_(div)(THTensor *r_, THTensor *t, real value)
           rp[i] = tp[i] / value;
   } else {
       TH_TENSOR_APPLY2(real, r_, real, t, *r__data = *t_data / value;);
+  }
+}
+
+void THTensor_(clamp)(THTensor *r_, THTensor *t, real min_value, real max_value)
+{
+  THTensor_(resizeAs)(r_, t);
+  if (THTensor_(isContiguous)(r_) && THTensor_(isContiguous)(t) && THTensor_(nElement)(r_) == THTensor_(nElement)(t)) {
+      real *tp = THTensor_(data)(t);
+      real *rp = THTensor_(data)(r_);
+      real t_val;
+      long sz = THTensor_(nElement)(t);
+      long i;
+      #pragma omp parallel for if(sz > TH_OMP_OVERHEAD_THRESHOLD) private(i)
+      for (i=0; i<sz; i++)
+          rp[i] = (tp[i] < min_value) ? min_value : (tp[i] > max_value ? max_value : tp[i]);
+  } else {
+      TH_TENSOR_APPLY2(real, r_, real, t, *r__data = (*t_data < min_value) ? min_value : (*t_data > max_value ? max_value : *t_data););
   }
 }
 
@@ -1226,6 +1250,22 @@ LAB_IMPLEMENT_BASIC_FUNCTION(abs,labs)
 LAB_IMPLEMENT_BASIC_FUNCTION(abs,abs)
 #endif /* int only part */
 
+#if defined(TH_REAL_IS_BYTE)
+
+#define TENSOR_IMPLEMENT_LOGICAL_SUM(NAME, OP, INIT_VALUE) \
+  int THTensor_(NAME)(THTensor *tensor) \
+  { \
+    THArgCheck(tensor->nDimension > 0, 1, "empty Tensor"); \
+    int sum = INIT_VALUE;                               \
+    TH_TENSOR_APPLY(real, tensor, sum OP *tensor_data;); \
+    return sum; \
+  }
+
+TENSOR_IMPLEMENT_LOGICAL_SUM(logicalall, &=, 1)
+TENSOR_IMPLEMENT_LOGICAL_SUM(logicalany, |=, 0)
+
+#endif /* Byte only part */
+
 /* floating point only now */
 #if defined(TH_REAL_IS_FLOAT) || defined(TH_REAL_IS_DOUBLE)
 
@@ -1245,6 +1285,7 @@ LAB_IMPLEMENT_BASIC_FUNCTION_VALUE(pow,pow)
 LAB_IMPLEMENT_BASIC_FUNCTION(sqrt,sqrt)
 LAB_IMPLEMENT_BASIC_FUNCTION(ceil,ceil)
 LAB_IMPLEMENT_BASIC_FUNCTION(floor,floor)
+LAB_IMPLEMENT_BASIC_FUNCTION(round,round)
 LAB_IMPLEMENT_BASIC_FUNCTION(abs,fabs)
 
 void THTensor_(atan2)(THTensor *r_, THTensor *tx, THTensor *ty)
@@ -1472,7 +1513,7 @@ accreal THTensor_(varall)(THTensor *tensor)
 accreal THTensor_(stdall)(THTensor *tensor)
 { 
   return sqrt(THTensor_(varall)(tensor));
-} 
+}
 
 void THTensor_(linspace)(THTensor *r_, real a, real b, long n)
 {
