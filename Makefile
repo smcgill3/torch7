@@ -39,6 +39,7 @@ CFLAGS= \
 	-I/usr/local/include \
 	-I/usr/include/lua \
 	-I/usr/include/lua5.1 \
+	-I/usr/local/include/lua5.1 \
 	-Ilib/luaT -Ilib/TH -I. \
 	-O3 -fpic\
 	-fno-stack-protector \
