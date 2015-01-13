@@ -4,6 +4,9 @@
 ## Stephen McGill, Apr 2014
 ## <smcgill3@seas.upenn.edu>
 
+#LUA=lua
+LUA=luajit
+
 TORCH_SOURCES=\
 	lib/TH/THBlas.c \
 	lib/TH/THDiskFile.c \
@@ -40,6 +43,7 @@ CFLAGS= \
 	-I/usr/include/lua \
 	-I/usr/include/lua5.1 \
 	-I/usr/local/include/lua5.1 \
+	-I/usr/local/include/luajit-2.1 \
 	-Ilib/luaT -Ilib/TH -I. \
 	-O3 -fpic\
 	-fno-stack-protector \
@@ -78,8 +82,8 @@ prep:
 	cp lib/TH/THGeneral.h.in lib/TH/THGeneral.h
 	$(SED) 's/cmakedefine/define/g' lib/TH/THGeneral.h
 	$(SED) 's/@TH_INLINE@/inline/g' lib/TH/THGeneral.h
-	lua -e "package.path = package.path..';ext/?/init.lua;ext/?.lua'" TensorMath.lua TensorMath.c
-	lua -e "package.path = package.path..';ext/?/init.lua;ext/?.lua'" random.lua random.c
+	$(LUA) -e "package.path = package.path..';ext/?/init.lua;ext/?.lua'" TensorMath.lua TensorMath.c
+	$(LUA) -e "package.path = package.path..';ext/?/init.lua;ext/?.lua'" random.lua random.c
 
 .c.o:
 	cc $(CFLAGS) $< -o $@
