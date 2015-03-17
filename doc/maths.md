@@ -285,6 +285,19 @@ is below the main diagonal.
 For more than 4 dimensions, you can use a storage:
 `y=torch.zeros(torch.LongStorage{m,n,k,l,o})`
 
+<a name="torch.histc"/>
+### [res] torch.histc([res,] x [,nbins, min_value, max_value]) ###
+<a name="torch.histc"/>
+
+`y=torch.histc(x)` returns the histogram of the elements in x. By default the
+elements are sorted into 100 equally spaced bins between the minimum and maximum
+values of x.
+
+`y=torch.histc(x,n)` same as above with n bins.
+
+`y=torch.histc(x,n,min,max)` same as above with n bins and min, max as elements
+range.
+
 <a name="torch.elementwise.dok"/>
 ### Element-wise Mathematical Operations ###
 
@@ -381,7 +394,11 @@ This function is more accurate than [log()](#torch.log) for small values of x.
 ### [res] torch.pow([res,] x) ###
 <a name="torch.pow"/>
 
+Let x be a tensor and n a number.
+
 `y=torch.pow(x,n)` returns a new tensor with the elements of x to the power of n.
+
+`y=torch.pow(n,x)` returns, for each element in x, n raised to the power of the element in x.
 
 `x:pow(n)` replaces all elements in-place with the elements of x to the power of n.
 
@@ -561,6 +578,34 @@ of elements must match, but sizes do not matter.
 
 `z:cmul(x,y)` puts the result in `z`.
 
+<a name="torch.cpow"/>
+### [res] torch.cpow([res,] tensor1, tensor2) ###
+<a name="torch.cpow"/>
+
+Element-wise power operation, taking the elements of `tensor1` to the powers
+given by elements of `tensor2`. The number of elements must match,
+but sizes do not matter.
+
+```
+> x = torch.Tensor(2,2):fill(2)
+> y = torch.Tensor(4):fill(3)
+> x:cpow(y)
+> = x
+
+ 8  8
+ 8  8
+[torch.Tensor of dimension 2x2]
+```
+
+`z=torch.cpow(x,y)` returns a new tensor.
+
+`torch.cpow(z,x,y)` puts the result in `z`.
+
+`y:cpow(x)` takes all elements of `y` to the powers given by the
+corresponding elements of `x`.
+
+`z:cpow(x,y)` puts the result in `z`.
+
 <a name="torch.addcmul"/>
 ### [res] torch.addcmul([res,] x [,value], tensor1, tensor2) ###
 <a name="torch.addcmul"/>
@@ -673,14 +718,14 @@ elements must match: both tensors are seen as a 1D vector.
 `x:dot(y)` returns dot product of `x` and `y`.
 
 <a name="torch.addmv"/>
-### [res] torch.addmv([res,] [v1,] vec1, [v2,] mat, vec2) ###
+### [res] torch.addmv([res,] [beta,] [v1,] vec1, [v2,] mat, vec2) ###
 <a name="torch.addmv"/>
 
 Performs a matrix-vector multiplication between `mat` (2D tensor)
 and `vec` (1D tensor) and add it to vec1. In other words,
 
 ```
-res = v1 * vec1 + v2 * mat*vec2
+res = beta * res + v1 * vec1 + v2 * mat*vec2
 ```
 
 Sizes must respect the matrix-multiplication operation: if `mat` is
@@ -710,6 +755,8 @@ be a vector of size `n`.
 
 Optional values `v1` and `v2` are scalars that multiply 
 `vec1` and `mat*vec2` respectively.
+
+Optional value `beta` is  a scalar that scales the result tensor, before accumulating the result into the tensor. Defaults to 1.0
 
 <a name="torch.addr"/>
 ### [res] torch.addr([res,] [v1,] mat, [v2,] vec1, vec2) ###
@@ -753,14 +800,14 @@ Optional values `v1` and `v2` are scalars that multiply
 
 
 <a name="torch.addmm"/>
-### [res] torch.addmm([res,] [v1,] M [v2,] mat1, mat2) ###
+### [res] torch.addmm([res,] [beta,] [v1,] M [v2,] mat1, mat2) ###
 <a name="torch.addmm"/>
 
 Performs a matrix-matrix multiplication between `mat1` (2D tensor)
 and `mat2` (2D tensor). In other words,
 
 ```
-res = v1 * M + v2 * mat1*mat2
+res = res * beta + v1 * M + v2 * mat1*mat2
 ```
 
 If `mat1` is a `n x m` matrix, `mat2` a `m x p` matrix, 
@@ -776,6 +823,41 @@ If `mat1` is a `n x m` matrix, `mat2` a `m x p` matrix,
 
 Optional values `v1` and `v2` are scalars that multiply 
 `M` and `mat1 * mat2` respectively.
+
+Optional value `beta` is  a scalar that scales the result tensor, before accumulating the result into the tensor. Defaults to 1.0
+
+<a name="torch.addbmm"/>
+### [res] torch.addbmm([res,] [v1,] M [v2,] mat1, mat2) ###
+<a name="torch.addbmm"/>
+
+Batch matrix matrix product of matrices stored in `batch1` and `batch2`, 
+with a reduced add step (all matrix multiplications get accumulated in a
+single place).
+`batch1` and `batch2` must be 3D tensors each containing the same number
+of matrices. If `batch1` is a `b x n x m` tensor, `batch2` a `b x m x p`
+tensor, res will be a `n x p` tensor.
+
+`torch.addbmm(M,x,y)` puts the result in a new tensor.
+
+`M:addbmm(x,y)` puts the result in `M`, resizing `M` if necessary.
+
+`M:addbmm(beta,M2,alpha,x,y)` puts the result in `M`, resizing `M` if necessary.
+
+<a name="torch.baddbmm"/>
+### [res] torch.baddbmm([res,] [v1,] M [v2,] mat1, mat2) ###
+<a name="torch.baddbmm"/>
+
+Batch matrix matrix product of matrices stored in `batch1` and `batch2`,
+with batch add.
+`batch1` and `batch2` must be 3D tensors each containing the same number
+of matrices. If `batch1` is a `b x n x m` tensor, `batch2` a `b x m x p`
+tensor, res will be a `b x n x p` tensor.
+
+`torch.baddbmm(M,x,y)` puts the result in a new tensor.
+
+`M:baddbmm(x,y)` puts the result in `M`, resizing `M` if necessary.
+
+`M:baddbmm(beta,M2,alpha,x,y)` puts the result in `M`, resizing `M` if necessary.
 
 <a name="torch.mv"/>
 ### [res] torch.mv([res,] mat, vec) ###
@@ -805,6 +887,22 @@ Matrix matrix product of `mat1` and `mat2`. If `mat1` is a
 `torch.mm(M,x,y)` puts the result in `M`.
 
 `M:mm(x,y)` puts the result in `M`.
+
+<a name="torch.bmm"/>
+### [res] torch.bmm([res,] batch1, batch2) ###
+<a name="torch.bmm"/>
+
+Batch matrix matrix product of matrices stored in `batch1` and `batch2`.
+`batch1` and `batch2` must be 3D tensors each containing the same number
+of matrices. If `batch1` is a `b x n x m` tensor, `batch2` a `b x m x p`
+tensor, res will be a `b x n x p` tensor.
+
+
+`torch.bmm(x,y)` puts the result in a new tensor.
+
+`torch.bmm(M,x,y)` puts the result in `M`, resizing `M` if necessary.
+
+`M:bmm(x,y)` puts the result in `M`, resizing `M` if necessary.
 
 <a name="torch.ger"/>
 ### [res] torch.ger([res,] vec1, vec2) ###

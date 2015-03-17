@@ -17,7 +17,7 @@ function torch.packageLuaPath(name)
        if not ret then --windows?
            ret = string.match(torch.packageLuaPath('torch'), '(.*)\\')
        end
-       return ret 
+       return ret
    end
    for path in string.gmatch(package.path, "[^;]+") do
       path = string.gsub(path, "%?", name)
@@ -33,12 +33,13 @@ function torch.packageLuaPath(name)
    end
 end
 
-function include(file, depth)
+local function include(file, depth)
    paths.dofile(file, 3 + (depth or 0))
 end
+rawset(_G, 'include', include)
 
 function torch.include(package, file)
-   dofile(torch.packageLuaPath(package) .. '/' .. file) 
+   dofile(torch.packageLuaPath(package) .. '/' .. file)
 end
 
 function torch.class(tname, parenttname)
@@ -51,7 +52,7 @@ function torch.class(tname, parenttname)
       end
       return self
    end
-   
+
    local function factory()
       local self = {}
       torch.setmetatable(self, tname)
@@ -114,8 +115,20 @@ include('FFI.lua')
 include('Tester.lua')
 include('test.lua')
 
+function torch.totable(obj)
+  if torch.isTensor(obj) or torch.isStorage(obj) then
+    return obj:totable()
+  else
+    error("obj must be a Storage or a Tensor")
+  end
+end
+
 function torch.isTensor(obj)
   return type(obj) == 'userdata' and torch.isTypeOf(obj, 'torch.*Tensor')
+end
+
+function torch.isStorage(obj)
+  return type(obj) == 'userdata' and torch.isTypeOf(obj, 'torch.*Storage')
 end
 -- alias for convenience
 torch.Tensor.isTensor = torch.isTensor

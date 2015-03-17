@@ -27,6 +27,7 @@ TH_API void THTensor_(clamp)(THTensor *r_, THTensor *t, real min_value, real max
 
 TH_API void THTensor_(cadd)(THTensor *r_, THTensor *t, real value, THTensor *src);
 TH_API void THTensor_(cmul)(THTensor *r_, THTensor *t, THTensor *src);
+TH_API void THTensor_(cpow)(THTensor *r_, THTensor *t, THTensor *src);
 TH_API void THTensor_(cdiv)(THTensor *r_, THTensor *t, THTensor *src);
 
 TH_API void THTensor_(addcmul)(THTensor *r_, THTensor *t, real value, THTensor *src1, THTensor *src2);
@@ -35,6 +36,9 @@ TH_API void THTensor_(addcdiv)(THTensor *r_, THTensor *t, real value, THTensor *
 TH_API void THTensor_(addmv)(THTensor *r_, real beta, THTensor *t, real alpha, THTensor *mat,  THTensor *vec);
 TH_API void THTensor_(addmm)(THTensor *r_, real beta, THTensor *t, real alpha, THTensor *mat1, THTensor *mat2);
 TH_API void THTensor_(addr)(THTensor *r_,  real beta, THTensor *t, real alpha, THTensor *vec1, THTensor *vec2);
+
+TH_API void THTensor_(addbmm)(THTensor *r_, real beta, THTensor *t, real alpha, THTensor *batch1, THTensor *batch2);
+TH_API void THTensor_(baddbmm)(THTensor *r_, real beta, THTensor *t, real alpha, THTensor *batch1, THTensor *batch2);
 
 TH_API void THTensor_(match)(THTensor *r_, THTensor *m1, THTensor *m2, real gain);
 
@@ -110,6 +114,7 @@ TH_API void THTensor_(atan)(THTensor *r_, THTensor *t);
 TH_API void THTensor_(atan2)(THTensor *r_, THTensor *tx, THTensor *ty);
 TH_API void THTensor_(tanh)(THTensor *r_, THTensor *t);
 TH_API void THTensor_(pow)(THTensor *r_, THTensor *t, real value);
+TH_API void THTensor_(tpow)(THTensor *r_, real value, THTensor *t);
 TH_API void THTensor_(sqrt)(THTensor *r_, THTensor *t);
 TH_API void THTensor_(ceil)(THTensor *r_, THTensor *t);
 TH_API void THTensor_(floor)(THTensor *r_, THTensor *t);

@@ -240,6 +240,12 @@ for _,Tensor in ipairs({"ByteTensor", "CharTensor",
          {name=Tensor, method={default=1}},
          {name=Tensor}})
 
+   wrap("cpow",
+        cname("cpow"),
+        {{name=Tensor, default=true, returned=true, method={default='nil'}},
+         {name=Tensor, method={default=1}},
+         {name=Tensor}})
+
    wrap("cdiv",
         cname("cdiv"),
         {{name=Tensor, default=true, returned=true, method={default='nil'}},
@@ -272,15 +278,8 @@ for _,Tensor in ipairs({"ByteTensor", "CharTensor",
                         string.format("TH%s_resize1d(%s, %s->size[0]);", Tensor, arg:carg(), arg.args[5]:carg())
                      }, '\n')
                end,
-          precall=function(arg)
-                     return table.concat(
-                        {
-                           string.format("TH%s_zero(%s);", Tensor, arg:carg()),
-                           arg.__metatable.precall(arg)
-                        }, '\n')
-                  end
        },
-         {name=real, default=1, invisible=true},
+         {name=real, default=0, invisible=true},
          {name=Tensor, default=1, invisible=true},
          {name=real, default=1, invisible=true},
          {name=Tensor, dim=2},
@@ -297,19 +296,31 @@ for _,Tensor in ipairs({"ByteTensor", "CharTensor",
                         string.format("TH%s_resize2d(%s, %s->size[0], %s->size[1]);", Tensor, arg:carg(), arg.args[5]:carg(), arg.args[6]:carg())
                      }, '\n')
                end,
-          precall=function(arg)
-                     return table.concat(
-                        {
-                           string.format("TH%s_zero(%s);", Tensor, arg:carg()),
-                           arg.__metatable.precall(arg)
-                        }, '\n')
-                  end
        },
-         {name=real, default=1, invisible=true},
+         {name=real, default=0, invisible=true},
          {name=Tensor, default=1, invisible=true},
          {name=real, default=1, invisible=true},
          {name=Tensor, dim=2},
          {name=Tensor, dim=2}}
+     )
+
+   wrap("bmm",
+        cname("baddbmm"),
+        {{name=Tensor, default=true, returned=true, method={default='nil'},
+          init=function(arg)
+                  return table.concat(
+                     {
+                        arg.__metatable.init(arg),
+                        string.format("TH%s_resize3d(%s, %s->size[0], %s->size[1], %s->size[2]);",
+                                      Tensor, arg:carg(), arg.args[5]:carg(), arg.args[5]:carg(), arg.args[6]:carg())
+                     }, '\n')
+               end,
+       },
+         {name=real, default=0, invisible=true},
+         {name=Tensor, default=1, invisible=true},
+         {name=real, default=1, invisible=true},
+         {name=Tensor, dim=3},
+         {name=Tensor, dim=3}}
      )
 
    wrap("ger",
@@ -338,9 +349,11 @@ for _,Tensor in ipairs({"ByteTensor", "CharTensor",
      )
 
    for _,f in ipairs({
-                        {name="addmv", dim1=1, dim2=2, dim3=1},
-                        {name="addmm", dim1=2, dim2=2, dim3=2},
-                        {name="addr",  dim1=2, dim2=1, dim3=1},
+                        {name="addmv",   dim1=1, dim2=2, dim3=1},
+                        {name="addmm",   dim1=2, dim2=2, dim3=2},
+                        {name="addr",    dim1=2, dim2=1, dim3=1},
+                        {name="addbmm",  dim1=2, dim2=3, dim3=3},
+                        {name="baddbmm", dim1=3, dim2=3, dim3=3},
                      }
                   ) do
 
@@ -892,6 +905,10 @@ static void THTensor_random1__(THTensor *self, THGenerator *gen, long b)
            {{name=Tensor, default=true, returned=true, method={default='nil'}},
             {name=Tensor, method={default=1}},
             {name=real}},
+           cname("tpow"),
+           {{name=Tensor, default=true, returned=true, method={default='nil'}},
+            {name=real},
+            {name=Tensor, method={default=1}}},
            "pow",
            {{name=real},
             {name=real},

@@ -1,17 +1,31 @@
 #include "THGeneral.h"
 #include "THRandom.h"
 
+#ifndef _WIN32
+#include <fcntl.h>
+#include <unistd.h>
+#endif
 
 /* Code for the Mersenne Twister random generator.... */
 #define n _MERSENNE_STATE_N
 #define m _MERSENNE_STATE_M
-THGenerator* THGenerator_new()
+
+/* Creates (unseeded) new generator*/
+static THGenerator* THGenerator_newUnseeded()
 {
   THGenerator *self = THAlloc(sizeof(THGenerator));
   memset(self, 0, sizeof(THGenerator));
   self->left = 1;
-  self->initf = 0;
+  self->seeded = 0;
   self->normal_is_valid = 0;
+  return self;
+}
+
+/* Creates new generator and makes sure it is seeded*/
+THGenerator* THGenerator_new()
+{
+  THGenerator *self = THGenerator_newUnseeded();
+  THRandom_seed(self);
   return self;
 }
 
@@ -26,9 +40,30 @@ void THGenerator_free(THGenerator *self)
   THFree(self);
 }
 
+#ifndef _WIN32
+static unsigned long readURandomLong()
+{
+  int randDev = open("/dev/urandom", O_RDONLY);
+  unsigned long randValue;
+  if (randDev < 0) {
+    THError("Unable to open /dev/urandom");
+  }
+  ssize_t readBytes = read(randDev, &randValue, sizeof(randValue));
+  if (readBytes < sizeof(randValue)) {
+    THError("Unable to read from /dev/urandom");
+  }
+  close(randDev);
+  return randValue;
+}
+#endif // _WIN32
+
 unsigned long THRandom_seed(THGenerator *_generator)
 {
+#ifdef _WIN32
   unsigned long s = (unsigned long)time(0);
+#else
+  unsigned long s = readURandomLong();
+#endif
   THRandom_manualSeed(_generator, s);
   return s;
 }
@@ -83,7 +118,7 @@ unsigned long THRandom_seed(THGenerator *_generator)
 */
 
 /* Macros for the Mersenne Twister random generator... */
-/* Period parameters */  
+/* Period parameters */
 /* #define n 624 */
 /* #define m 397 */
 #define MATRIX_A 0x9908b0dfUL   /* constant vector a */
@@ -98,7 +133,7 @@ void THRandom_manualSeed(THGenerator *_generator, unsigned long the_seed_)
   int j;
 
   /* This ensures reseeding resets all of the state (i.e. state for Gaussian numbers) */
-  THGenerator *blank = THGenerator_new();
+  THGenerator *blank = THGenerator_newUnseeded();
   THGenerator_copy(_generator, blank);
   THGenerator_free(blank);
 
@@ -114,16 +149,11 @@ void THRandom_manualSeed(THGenerator *_generator, unsigned long the_seed_)
     _generator->state[j] &= 0xffffffffUL;  /* for >32 bit machines */
   }
   _generator->left = 1;
-  _generator->initf = 1;
+  _generator->seeded = 1;
 }
 
 unsigned long THRandom_initialSeed(THGenerator *_generator)
 {
-  if(_generator->initf == 0)
-  {
-    THRandom_seed(_generator);
-  }
-
   return _generator->the_initial_seed;
 }
 
@@ -132,21 +162,26 @@ void THRandom_nextState(THGenerator *_generator)
   unsigned long *p = _generator->state;
   int j;
 
-  /* if init_genrand() has not been called, */
-  /* a default initial seed is used         */
-  if(_generator->initf == 0)
-    THRandom_seed(_generator);
-
   _generator->left = n;
   _generator->next = 0;
-    
-  for(j = n-m+1; --j; p++) 
+
+  for(j = n-m+1; --j; p++)
     *p = p[m] ^ TWIST(p[0], p[1]);
 
-  for(j = m; --j; p++) 
+  for(j = m; --j; p++)
     *p = p[m-n] ^ TWIST(p[0], p[1]);
 
   *p = p[m-n] ^ TWIST(p[0], _generator->state[0]);
+}
+
+int THRandom_isValidState(THGenerator *_generator)
+{
+  if ((_generator->seeded == 1) &&
+    (_generator->left > 0 && _generator->left <= n) &&
+    (_generator->next >= 0 && _generator->next <= n))
+    return 1;
+
+  return 0;
 }
 
 unsigned long THRandom_random(THGenerator *_generator)
@@ -156,7 +191,7 @@ unsigned long THRandom_random(THGenerator *_generator)
   if (--(_generator->left) == 0)
     THRandom_nextState(_generator);
   y = *(_generator->state + (_generator->next)++);
-  
+
   /* Tempering */
   y ^= (y >> 11);
   y ^= (y << 7) & 0x9d2c5680UL;
@@ -180,8 +215,8 @@ static double __uniform__(THGenerator *_generator)
   y ^= (y << 7) & 0x9d2c5680UL;
   y ^= (y << 15) & 0xefc60000UL;
   y ^= (y >> 18);
-  
-  return (double)y * (1.0/4294967296.0); 
+
+  return (double)y * (1.0/4294967296.0);
   /* divided by 2^32 */
 }
 
@@ -212,7 +247,7 @@ double THRandom_normal(THGenerator *_generator, double mean, double stdv)
   }
   else
     _generator->normal_is_valid = 0;
-  
+
   if(_generator->normal_is_valid)
     return _generator->normal_rho*cos(2.*M_PI*_generator->normal_x)*stdv+mean;
   else
@@ -249,23 +284,4 @@ int THRandom_bernoulli(THGenerator *_generator, double p)
 {
   THArgCheck(p >= 0 && p <= 1, 1, "must be >= 0 and <= 1");
   return(__uniform__(_generator) <= p);
-}
-
-/* returns the random number state */
-void THRandom_getState(THGenerator *_generator, unsigned long *_state, long *offset, long *_left)
-{
-  if(_generator->initf == 0)
-    THRandom_seed(_generator);
-  memmove(_state, _generator->state, n*sizeof(long));
-  *offset = _generator->next;
-  *_left = _generator->left;
-}
-
-/* sets the random number state */
-void THRandom_setState(THGenerator *_generator, unsigned long *_state, long offset, long _left)
-{
-  memmove(_generator->state, _state, n*sizeof(long));
-  _generator->next = offset;
-  _generator->left = _left;
-  _generator->initf = 1;
 }

@@ -1,3 +1,4 @@
+[![Join the chat at https://gitter.im/torch/torch7](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/torch/torch7?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 [![Build Status](https://travis-ci.org/torch/torch7.svg)](https://travis-ci.org/torch/torch7)
 
 <a name="torch.reference.dok"/>
@@ -9,7 +10,7 @@ over these are defined. Additionally, it provides many utilities for
 accessing files, serializing objects of arbitrary types and other
 useful utilities.
 
-<a name="torch.reference.dok"/>
+<a name="torch.overview.dok"/>
 ## Torch Packages ##
 
   * Tensor Library

@@ -10,7 +10,7 @@ typedef struct THGenerator {
   /* The initial seed. */
   unsigned long the_initial_seed;
   int left;  /* = 1; */
-  int initf; /* = 0; */
+  int seeded; /* = 0; */
   unsigned long next;
   unsigned long state[_MERSENNE_STATE_N]; /* the array for the state vector  */
   /********************************/
@@ -29,7 +29,8 @@ TH_API THGenerator * THGenerator_new();
 TH_API THGenerator * THGenerator_copy(THGenerator *self, THGenerator *from);
 TH_API void THGenerator_free(THGenerator *gen);
 
-/* Initializes the random number generator with the current time (granularity: seconds) and returns the seed. */
+/* Initializes the random number generator from /dev/urandom (or on Windows
+platforms with the current time (granularity: seconds)) and returns the seed. */
 TH_API unsigned long THRandom_seed(THGenerator *_generator);
 
 /* Initializes the random number generator with the given long "the_seed_". */
