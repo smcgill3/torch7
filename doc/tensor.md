@@ -1324,7 +1324,7 @@ x = torch.range(1,12):double():resize(3,4)
   9  10  11  12
 [torch.DoubleTensor of dimension 3x4]
 
-mask = torch.DoubleTensor():rand(12):mul(2):floor():byte():resize(2,6)
+mask = torch.ByteTensor(2,6):bernoulli()
 > mask 
  1  0  1  0  0  0
  1  1  0  0  0  1
@@ -1349,7 +1349,7 @@ z:maskedSelect(x, mask)
  12
 ```
 
-Note how the dimensions of the above `x`, `mask` and `y' do not match.
+Note how the dimensions of the above `x`, `mask` and `y` do not match.
 Also note how an existing tensor `z` can be used to store the results.
 
 
@@ -1358,21 +1358,21 @@ Also note how an existing tensor `z` can be used to store the results.
 
 Copies the masked elements of `tensor` into itself. The masked elements are those elements having a 
 corresponding `1` in the `mask` Tensor. This `mask` is a `torch.ByteTensor` 
-of zeros and ones. The `mask`, `tensor` and `Tensor` must have the same number of elements.
+of zeros and ones. `Tensor` must have atleast the number of elements that are equal to number of `1`s in the mask.
 
 ```lua
-x = torch.range(1,8):double():resize(2,4)
+x = torch.range(1,4):double():resize(2,2)
 > x
- 1  2  3  4
- 5  6  7  8
+ 1  2  
+ 3  4
 [torch.DoubleTensor of dimension 2x4]
 
-mask = torch.DoubleTensor():rand(8):mul(2):floor():byte():resize(1,8)
+mask = torch.ByteTensor(1,8):bernoulli()
 > mask
- 1  0  0  1  1  0  0  1
+ 0  0  1  1  1  0  1  0
 [torch.ByteTensor of dimension 1x8]
 
-y = x:clone():fill(-1)
+y = torch.DoubleTensor(2,4):fill(-1)
 > y
 -1 -1 -1 -1
 -1 -1 -1 -1
@@ -1380,8 +1380,8 @@ y = x:clone():fill(-1)
 
 y:maskedCopy(mask, x)
 > y
- 1 -1 -1  2
- 3 -1 -1  4
+ -1 -1  1  2
+  3 -1  4 -1
 [torch.DoubleTensor of dimension 2x4]
 ```
 
@@ -1401,7 +1401,7 @@ x = torch.range(1,4):double():resize(1,4)
  1  2  3  4
 [torch.DoubleTensor of dimension 1x4]
 
-mask = torch.DoubleTensor():rand(4):mul(2):floor():byte():resize(2,2)
+mask = torch.ByteTensor(2,2):bernoulli()
 > mask
  0  0
  1  1
