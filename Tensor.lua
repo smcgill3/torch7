@@ -9,6 +9,9 @@ local types = {'Byte', 'Char', 'Short', 'Int', 'Long', 'Float', 'Double'}
 
 -- tostring() functions for Tensor and Storage
 local function Storage__printformat(self)
+   if self:size() == 0 then 
+     return "", nil, 0
+   end
    local intMode = true
    local type = torch.typename(self)
 --   if type == 'torch.FloatStorage' or type == 'torch.DoubleStorage' then
@@ -208,13 +211,13 @@ function Tensor.__tostring__(self)
                table.insert(strt, string.format(format, tensor[i]) .. '\n')
             end
          end
-         table.insert(strt, '[' .. torch.typename(self) .. ' of dimension ' .. tensor:size(1) .. ']\n')
+         table.insert(strt, '[' .. torch.typename(self) .. ' of size ' .. tensor:size(1) .. ']\n')
       elseif tensor:nDimension() == 2 then
          table.insert(strt, Tensor__printMatrix(tensor))
-         table.insert(strt, '[' .. torch.typename(self) .. ' of dimension ' .. tensor:size(1) .. 'x' .. tensor:size(2) .. ']\n')
+         table.insert(strt, '[' .. torch.typename(self) .. ' of size ' .. tensor:size(1) .. 'x' .. tensor:size(2) .. ']\n')
       else
          table.insert(strt, Tensor__printTensor(tensor))
-         table.insert(strt, '[' .. torch.typename(self) .. ' of dimension ')
+         table.insert(strt, '[' .. torch.typename(self) .. ' of size ')
          for i=1,tensor:nDimension() do
             table.insert(strt, tensor:size(i))
             if i ~= tensor:nDimension() then
@@ -492,15 +495,14 @@ function Tensor.split(result, tensor, splitSize, dim)
       end
    end
    dim = dim or 1
-   local splits = {}
    local start = 1
    while start <= tensor:size(dim) do
       local size = math.min(splitSize, tensor:size(dim) - start + 1)
       local split = tensor:narrow(dim, start, size)
-      table.insert(splits, split)
+      table.insert(result, split)
       start = start + size
    end
-   return splits
+   return result
 end
 torch.split = Tensor.split
 

@@ -698,6 +698,24 @@ false
 [torch.LongStorage of size 1]
 ```
 
+<a name="torch.Tensor.isSize"/>
+### [boolean] isSize(storage) ###
+
+Returns `true` iff the dimensions of the `Tensor` match the elements of the `storage`.
+```lua
+x = torch.Tensor(4,5)
+y = torch.LongStorage({4,5})
+z = torch.LongStorage({5,4,1})
+> x:isSize(y)
+true
+
+> x:isSize(z)
+false
+
+> x:isSize(x:size())
+true
+```
+
 <a name="torch.Tensor.isSameSizeAs"/>
 ### [boolean] isSameSizeAs(tensor) ###
 
@@ -1358,7 +1376,8 @@ Also note how an existing tensor `z` can be used to store the results.
 
 Copies the masked elements of `tensor` into itself. The masked elements are those elements having a 
 corresponding `1` in the `mask` Tensor. This `mask` is a `torch.ByteTensor` 
-of zeros and ones. `Tensor` must have atleast the number of elements that are equal to number of `1`s in the mask.
+of zeros and ones. The destination `Tensor` and the `mask` Tensor should have the same number of elements.
+The source `tensor` should have atleast as many elements as the number of 1s in the `mask`.
 
 ```lua
 x = torch.range(1,4):double():resize(2,2)
@@ -2082,3 +2101,27 @@ tt = torch.Tensor(s)
 Returns a LuaJIT FFI pointer to the C structure of the tensor.
 Use this with caution, and look at [FFI.lua](https://github.com/torch/torch7/blob/master/FFI.lua) 
 for the members of the tensor
+
+## Reference counting ##
+
+Tensors are reference-counted. It means that each time an object (C or the
+Lua state) need to keep a reference over a tensor, the corresponding
+tensor reference counter will be [increased](#torch.Tensor.retain). The
+reference counter is [decreased]((#torch.Tensor.free)) when the object
+does not need the tensor anymore.
+
+These methods should be used with extreme care. In general, they should
+never be called, except if you know what you are doing, as the handling of
+references is done automatically. They can be useful in threaded
+environments. Note that these methods are atomic operations.
+
+<a name="torch.Tensor.retain"/>
+### retain() ###
+
+Increment the reference counter of the tensor.
+
+<a name="torch.Tensor.free"/>
+### free() ###
+
+Decrement the reference counter of the tensor. Free the tensor if the
+counter is at 0.

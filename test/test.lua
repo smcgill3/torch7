@@ -3,6 +3,7 @@
 local mytester
 local torchtest = {}
 local msize = 100
+local precision
 
 local function maxdiff(x,y)
    local d = x-y
@@ -1796,6 +1797,17 @@ function torchtest.maskedCopy()
       end
    end
    mytester:assertTensorEq(dest, dest2, 0.000001, "maskedCopy error")
+
+   -- make source bigger than number of 1s in mask
+   src = torch.randn(nDest) 
+   local ok = pcall(dest.maskedCopy, dest, mask, src)
+   mytester:assert(ok, "maskedCopy incorrect complaint when" 
+		      .. " src is bigger than mask's one count")
+   
+   src = torch.randn(nCopy - 1) -- make src smaller. this should fail
+   local ok = pcall(dest.maskedCopy, dest, mask, src)
+   mytester:assert(not ok, "maskedCopy not erroring when" 
+		      .. " src is smaller than mask's one count")
 end
 
 function torchtest.maskedSelect()
@@ -1970,6 +1982,52 @@ function torchtest.isSameSizeAs()
    mytester:assert(t1:isSameSizeAs(t4) == true, "wrong answer ")
 end
 
+function torchtest.isSize()
+  local t1 = torch.Tensor(3, 4, 5)
+  local s1 = torch.LongStorage({3, 4, 5})
+  local s2 = torch.LongStorage({5, 4, 3})
+
+   mytester:assert(t1:isSize(s1) == true, "wrong answer ")
+   mytester:assert(t1:isSize(s2) == false, "wrong answer ")
+   mytester:assert(t1:isSize(t1:size()) == true, "wrong answer ")
+end
+
+function torchtest.elementSize()
+  local byte   =   torch.ByteStorage():elementSize()
+  local char   =   torch.CharStorage():elementSize()
+  local short  =  torch.ShortStorage():elementSize()
+  local int    =    torch.IntStorage():elementSize()
+  local long   =   torch.LongStorage():elementSize()
+  local float  =  torch.FloatStorage():elementSize()
+  local double = torch.DoubleStorage():elementSize()
+
+  mytester:asserteq(byte,   torch.ByteTensor():elementSize())
+  mytester:asserteq(char,   torch.CharTensor():elementSize())
+  mytester:asserteq(short,  torch.ShortTensor():elementSize())
+  mytester:asserteq(int,    torch.IntTensor():elementSize())
+  mytester:asserteq(long,   torch.LongTensor():elementSize())
+  mytester:asserteq(float,  torch.FloatTensor():elementSize())
+  mytester:asserteq(double, torch.DoubleTensor():elementSize())
+
+  mytester:assertne(byte, 0)
+  mytester:assertne(char, 0)
+  mytester:assertne(short, 0)
+  mytester:assertne(int, 0)
+  mytester:assertne(long, 0)
+  mytester:assertne(float, 0)
+  mytester:assertne(double, 0)
+
+  -- These tests are portable, not necessarily strict for your system.
+  mytester:asserteq(byte, 1)
+  mytester:asserteq(char, 1)
+  mytester:assert(short >= 2)
+  mytester:assert(int >= 2)
+  mytester:assert(int >= short)
+  mytester:assert(long >= 4)
+  mytester:assert(long >= int)
+  mytester:assert(double >= float)
+end
+
 function torchtest.split()
    local result = {}
    local tensor = torch.rand(7,4)
@@ -1989,6 +2047,10 @@ function torchtest.split()
       mytester:assertTableEq(split:size():totable(), targetSize[i], 'Result size error in split '..i)
       mytester:assertTensorEq(tensor:narrow(dim, start, targetSize[i][dim]), split, 0.000001, 'Result content error in split '..i)
       start = start + targetSize[i][dim]
+   end
+   mytester:asserteq(#splits,#result, 0, 'Non-consistent output size from split')
+   for i, split in ipairs(splits) do
+      mytester:assertTensorEq(split,result[i], 0, 'Non-consistent outputs from split')
    end
 end
 

@@ -70,7 +70,7 @@ Example:
 ```
 
 <a name="torch.Storage"/>
-### torch.TYPEStorage(filename [, shared]) ###
+### torch.TYPEStorage(filename [, shared [, size]]) ###
 <a name="__torch.StorageMap"/>
 
 Returns a new kind of `Storage` which maps the contents of the given
@@ -87,10 +87,21 @@ readable. Any changes on the storage will not affect the file. Note:
 changes made on the file after creation of the storage have an unspecified
 effect on the storage contents.
 
-The [size](#torch.Storage.size) of the returned `Storage` will be
+If `size` is specified, it is the [size](#torch.Storage.size) of the returned
+`Storage` (in elements). In this case, if `shared` is false then the file must
+already contain at least
 ```lua
-(size of file in byte)/(size of TYPE).
+size*(size of TYPE)
 ```
+bytes. If `shared` is true then the file will be created if necessary, and
+extended if necessary to that many bytes in length.
+
+If `size` is not specified then the [size](#torch.Storage.size) of the returned
+`Storage`  will be
+```lua
+(size of file in byte)/(size of TYPE)
+```
+elements.
 
 Example:
 ```lua
@@ -223,3 +234,26 @@ The contents of the storage viewed as a string are returned. The string might co
 blah blah
 ```
 
+## Reference counting methods ##
+
+Storages are reference-counted. It means that each time an object (C or the
+Lua state) need to keep a reference over a storage, the corresponding
+storage reference counter will be [increased](#torch.Storage.retain). The
+reference counter is [decreased]((#torch.Storage.free)) when the object
+does not need the storage anymore.
+
+These methods should be used with extreme care. In general, they should
+never be called, except if you know what you are doing, as the handling of
+references is done automatically. They can be useful in threaded
+environments. Note that these methods are atomic operations.
+
+<a name="torch.Storage.retain"/>
+### retain() ###
+
+Increment the reference counter of the storage.
+
+<a name="torch.Storage.free"/>
+### free() ###
+
+Decrement the reference counter of the storage. Free the storage if the
+counter is at 0.

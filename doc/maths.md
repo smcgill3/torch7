@@ -250,7 +250,7 @@ For more than 4 dimensions, you can use a storage as argument:
 <a name="torch.range"/>
 
 `y=torch.range(x,y)` returns a tensor of size `floor((y - x) / step) + 1` with values
-from `x` to `y` with step `setp` (default to 1).
+from `x` to `y` with step `step` (default to 1).
 
 ```lua
 > print(torch.range(2,5))
@@ -1777,9 +1777,9 @@ z = x * y
 ```
 
 <a name="torch.logical.dok"/>
-## Logical Operations on Tensors ##`
-`
-Th`ese functions implement logical comparison operators that takea
+## Logical Operations on Tensors ##
+
+These functions implement logical comparison operators that take a
 tensor as input and another tensor or a number as the comparison
 target.  They return a `ByteTensor` in which each element is 0 or 1
 indicating if the comparison for the corresponding element was
