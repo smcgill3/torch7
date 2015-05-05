@@ -8,6 +8,8 @@
 LUA=luajit
 
 TORCH_SOURCES=\
+	lib/TH/THAllocator.c \
+	lib/TH/THAtomic.c \
 	lib/TH/THBlas.c \
 	lib/TH/THDiskFile.c \
 	lib/TH/THFile.c \
@@ -18,7 +20,6 @@ TORCH_SOURCES=\
 	lib/TH/THRandom.c \
 	lib/TH/THStorage.c \
 	lib/TH/THTensor.c \
-	lib/TH/THAllocator.c \
 	lib/luaT/luaT.c \
   Generator.c \
 	DiskFile.c \
