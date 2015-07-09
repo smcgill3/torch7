@@ -58,7 +58,7 @@ static int torch_NAME(lua_State *L)
   else if(narg >= 2 && (tname = torch_istensortype(L, luaT_typename(L, 2)))) /* second? */
   {
   }
-  else if(narg >= 1 && lua_isstring(L, narg)
+  else if(narg >= 1 && lua_type(L, narg) == LUA_TSTRING
 	  && (tname = torch_istensortype(L, lua_tostring(L, narg)))) /* do we have a valid tensor type string then? */
   {
     lua_remove(L, -2);
@@ -120,7 +120,8 @@ local function wrap(...)
          end
       end
    end
-   method:wrap(unpack(args))
+   local unpack = unpack or table.unpack
+    method:wrap(unpack(args))
 end
 
 local reals = {ByteTensor='unsigned char',
@@ -188,6 +189,35 @@ for _,Tensor in ipairs({"ByteTensor", "CharTensor",
         {{name=Tensor, default=true, returned=true},
          {name=Tensor},
          {name="LongArg"}})
+
+   wrap("gather",
+        cname("gather"),
+        {{name=Tensor, default=true, returned=true,
+          init=function(arg)
+                  return table.concat(
+                     {
+                        arg.__metatable.init(arg),
+                        string.format("THLongStorage* %s_size = THLongTensor_newSizeOf(%s);", arg:carg(), arg.args[4]:carg()),
+                        string.format("TH%s_resize(%s, %s_size, NULL);", Tensor, arg:carg(), arg:carg()),
+                        string.format("THLongStorage_free(%s_size);", arg:carg())
+                     }, '\n')
+               end
+         },
+         {name=Tensor},
+         {name="index"},
+         {name="IndexTensor", noreadadd=true}})
+
+   wrap("scatter",
+        cname("scatter"),
+        {{name=Tensor, returned=true},
+         {name="index"},
+         {name="IndexTensor", noreadadd=true},
+         {name=Tensor}},
+        cname("scatterFill"),
+        {{name=Tensor, returned=true},
+         {name="index"},
+         {name="IndexTensor", noreadadd=true},
+         {name=real}})
 
    wrap("dot",
         cname("dot"),
@@ -454,9 +484,9 @@ for _,Tensor in ipairs({"ByteTensor", "CharTensor",
    wrap("range",
         cname("range"),
         {{name=Tensor, default=true, returned=true, method={default='nil'}},
-         {name=real},
-         {name=real},
-         {name=real, default=1}})
+         {name=accreal},
+         {name=accreal},
+         {name=accreal, default=1}})
 
    wrap("randperm",
         cname("randperm"),
@@ -516,13 +546,13 @@ for _,Tensor in ipairs({"ByteTensor", "CharTensor",
    if Tensor == 'ByteTensor' then -- we declare this only once
       interface:print(
          [[
-static int THRandom_random2__(THGenerator *gen, long a, long b)
+static long THRandom_random2__(THGenerator *gen, long a, long b)
 {
   THArgCheck(b >= a, 2, "upper bound must be larger than lower bound");
   return((THRandom_random(gen) % (b+1-a)) + a);
 }
          
-static int THRandom_random1__(THGenerator *gen, long b)
+static long THRandom_random1__(THGenerator *gen, long b)
 {
   THArgCheck(b > 0, 1, "upper bound must be strictly positive");
   return(THRandom_random(gen) % b + 1);
@@ -1061,6 +1091,36 @@ static void THTensor_random1__(THTensor *self, THGenerator *gen, long b)
                      {{name=Tensor, default=true, returned=true, invisible=true},
                       {name=Tensor}}
                   )
+      interface:wrap("qr",
+                     cname("qr"),
+                     {{name=Tensor, returned=true},
+                      {name=Tensor, returned=true},
+                      {name=Tensor}},
+                     cname("qr"),
+                     {{name=Tensor, default=true, returned=true, invisible=true},
+                      {name=Tensor, default=true, returned=true, invisible=true},
+                      {name=Tensor}}
+                  )
+      interface:wrap("geqrf",
+                     cname("geqrf"),
+                     {{name=Tensor, returned=true},
+                      {name=Tensor, returned=true},
+                      {name=Tensor}},
+                     cname("geqrf"),
+                     {{name=Tensor, default=true, returned=true, invisible=true},
+                      {name=Tensor, default=true, returned=true, invisible=true},
+                      {name=Tensor}}
+                  )
+      interface:wrap("orgqr",
+                     cname("orgqr"),
+                     {{name=Tensor, returned=true},
+                      {name=Tensor},
+                      {name=Tensor}},
+                     cname("orgqr"),
+                     {{name=Tensor, default=true, returned=true, invisible=true},
+                      {name=Tensor},
+                      {name=Tensor}}
+                  )
    end
 
    method:register(string.format("m_torch_%sMath__", Tensor))
@@ -1074,12 +1134,12 @@ static void torch_TensorMath_init(lua_State *L)
   luaT_pushmetatable(L, "torch.Tensor");
 
   /* register methods */
-  luaL_register(L, NULL, m_torch_TensorMath__);
+  luaT_setfuncs(L, m_torch_TensorMath__, 0);
 
   /* register functions into the "torch" field of the tensor metaclass */
   lua_pushstring(L, "torch");
   lua_newtable(L);
-  luaL_register(L, NULL, torch_TensorMath__);
+  luaT_setfuncs(L, torch_TensorMath__, 0);
   lua_rawset(L, -3);
   lua_pop(L, 1);
 }
@@ -1098,7 +1158,7 @@ void torch_TensorMath_init(lua_State *L)
   torch_LongTensorMath_init(L);
   torch_FloatTensorMath_init(L);
   torch_DoubleTensorMath_init(L);
-  luaL_register(L, NULL, torch_TensorMath__);
+  luaT_setfuncs(L, torch_TensorMath__, 0);
 }
 ]])
 

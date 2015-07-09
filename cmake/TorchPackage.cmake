@@ -8,7 +8,8 @@ MACRO(ADD_TORCH_PACKAGE package src luasrc)
   IF(src)      
 
     ADD_LIBRARY(${package} MODULE ${src})
-    
+    ADD_LIBRARY(${package}_static STATIC ${src})
+
     ### Torch packages supposes libraries prefix is "lib"
     SET_TARGET_PROPERTIES(${package} PROPERTIES
       PREFIX "lib"
@@ -19,8 +20,13 @@ MACRO(ADD_TORCH_PACKAGE package src luasrc)
       SET_TARGET_PROPERTIES(${package} PROPERTIES
         LINK_FLAGS "-undefined dynamic_lookup")
     ENDIF()
-    
-    INSTALL(TARGETS ${package} 
+
+    SET_TARGET_PROPERTIES(${package}_static PROPERTIES
+      COMPILE_FLAGS "-fPIC")
+    SET_TARGET_PROPERTIES(${package}_static PROPERTIES
+      PREFIX "lib" IMPORT_PREFIX "lib" OUTPUT_NAME "${package}")
+
+    INSTALL(TARGETS ${package}
       RUNTIME DESTINATION ${Torch_INSTALL_LUA_CPATH_SUBDIR}
       LIBRARY DESTINATION ${Torch_INSTALL_LUA_CPATH_SUBDIR})
     

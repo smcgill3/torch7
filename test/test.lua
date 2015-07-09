@@ -5,6 +5,10 @@ local torchtest = {}
 local msize = 100
 local precision
 
+-- Lua 5.2 compatibility
+local loadstring = loadstring or load
+local unpack = unpack or table.unpack
+
 local function maxdiff(x,y)
    local d = x-y
    if x:type() == 'torch.DoubleTensor' or x:type() == 'torch.FloatTensor' then
@@ -16,19 +20,25 @@ local function maxdiff(x,y)
 end
 
 function torchtest.dot()
-   local v1 = torch.randn(100)
-   local v2 = torch.randn(100)
+   local types = {
+      ['torch.DoubleTensor'] = 1e-8, -- for ddot
+      ['torch.FloatTensor']  = 1e-4, -- for sdot
+   }
+   for tname, prec in pairs(types) do
+      local v1 = torch.randn(100):type(tname)
+      local v2 = torch.randn(100):type(tname)
 
-   local res1 = torch.dot(v1,v2)
+      local res1 = torch.dot(v1,v2)
 
-   local res2 = 0
-   for i = 1,v1:size(1) do
-      res2 = res2 + v1[i] * v2[i]
+      local res2 = 0
+      for i = 1,v1:size(1) do
+         res2 = res2 + v1[i] * v2[i]
+      end
+
+      local err = math.abs(res1-res2)
+
+      mytester:assertlt(err, prec, 'error in torch.dot (' .. tname .. ')')
    end
-
-   local err = math.abs(res1-res2)
-
-   mytester:assertlt(err, precision, 'error in torch.dot')
 end
 
 local genericSingleOpTest = [[
@@ -1020,6 +1030,18 @@ function torchtest.rangeequalbounds()
    torch.range(mxx,1,1,1)
    mytester:asserteq(maxdiff(mx,mxx),0,'torch.range value for equal bounds step')
 end
+function torchtest.rangefloat()
+   local mx = torch.FloatTensor():range(0.6, 0.9, 0.1)
+   mytester:asserteq(mx:size(1), 4, 'wrong size for FloatTensor range')
+   mx = torch.FloatTensor():range(1, 10, 0.3)
+   mytester:asserteq(mx:size(1), 31, 'wrong size for FloatTensor range')
+end
+function torchtest.rangedouble()
+   local mx = torch.DoubleTensor():range(0.6, 0.9, 0.1)
+   mytester:asserteq(mx:size(1), 4, 'wrong size for DoubleTensor range')
+   mx = torch.DoubleTensor():range(1, 10, 0.3)
+   mytester:asserteq(mx:size(1), 31, 'wrong size for DoubleTensor range')
+end
 function torchtest.randperm()
    local t=os.time()
    torch.manualSeed(t)
@@ -1389,6 +1411,24 @@ function torchtest.eig()
    mytester:assertlt(maxdiff(ee,te),1e-12,'torch.eig value')
    mytester:assertlt(maxdiff(vv,vvv),1e-12,'torch.eig value')
    mytester:assertlt(maxdiff(vv,tv),1e-12,'torch.eig value')
+end
+function torchtest.test_symeig()
+  local xval = torch.rand(100,3)
+  local cov = torch.mm(xval:t(), xval)
+  local rese = torch.zeros(3)
+  local resv = torch.zeros(3,3)
+
+  -- First call to symeig
+  mytester:assert(resv:isContiguous(), 'resv is not contiguous') -- PASS
+  torch.symeig(rese, resv, cov:clone(), 'V')
+  local ahat = resv*torch.diag(rese)*resv:t()
+  mytester:assertTensorEq(cov, ahat, 1e-8, 'USV\' wrong') -- PASS
+
+  -- Second call to symeig
+  mytester:assert(not resv:isContiguous(), 'resv is contiguous') -- FAIL
+  torch.symeig(rese, resv, cov:clone(), 'V')
+  local ahat = torch.mm(torch.mm(resv, torch.diag(rese)), resv:t())
+  mytester:assertTensorEq(cov, ahat, 1e-8, 'USV\' wrong') -- FAIL
 end
 function torchtest.svd()
    if not torch.svd then return end
@@ -1782,6 +1822,113 @@ function torchtest.indexCopy()
    mytester:assertTensorEq(dest, dest2, 0.000001, "indexCopy scalar error")
 end
 
+-- Fill idx with valid indices.
+local function fillIdx(idx, dim, dim_size, elems_per_row, m, n, o)
+   for i = 1, (dim == 1 and 1 or m) do
+      for j = 1, (dim == 2 and 1 or n) do
+         for k = 1, (dim == 3 and 1 or o) do
+            local ii = {i, j, k}
+            ii[dim] = {}
+            idx[ii] = torch.randperm(dim_size)[{{1, elems_per_row}}]
+         end
+      end
+   end
+end
+
+function torchtest.gather()
+   local m, n, o = torch.random(10, 20), torch.random(10, 20), torch.random(10, 20)
+   local elems_per_row = torch.random(10)
+   local dim = torch.random(3)
+
+   local src = torch.randn(m, n, o)
+   local idx_size = {m, n, o}
+   idx_size[dim] = elems_per_row
+   local idx = torch.LongTensor():resize(unpack(idx_size))
+   fillIdx(idx, dim, src:size(dim), elems_per_row, m, n, o)
+
+   local actual = torch.gather(src, dim, idx)
+   local expected = torch.Tensor():resize(unpack(idx_size))
+   for i = 1, idx_size[1] do
+      for j = 1, idx_size[2] do
+         for k = 1, idx_size[3] do
+            local ii = {i, j, k}
+            ii[dim] = idx[i][j][k]
+            expected[i][j][k] = src[ii]
+         end
+      end
+   end
+   mytester:assertTensorEq(actual, expected, 0, "Wrong values for gather")
+
+   idx[1][1][1] = 23
+   mytester:assertError(function() torch.gather(src, dim, idx) end,
+                        "Invalid index not detected")
+end
+
+function torchtest.gatherMax()
+   local src = torch.randn(3, 4, 5)
+   local expected, idx = src:max(3)
+   local actual = torch.gather(src, 3, idx)
+   mytester:assertTensorEq(actual, expected, 0, "Wrong values for gather")
+end
+
+function torchtest.scatter()
+   local m, n, o = torch.random(10, 20), torch.random(10, 20), torch.random(10, 20)
+   local elems_per_row = torch.random(10)
+   local dim = torch.random(3)
+
+   local idx_size = {m, n, o}
+   idx_size[dim] = elems_per_row
+   local idx = torch.LongTensor():resize(unpack(idx_size))
+   fillIdx(idx, dim, ({m, n, o})[dim], elems_per_row, m, n, o)
+   local src = torch.Tensor():resize(unpack(idx_size)):normal()
+
+   local actual = torch.zeros(m, n, o):scatter(dim, idx, src)
+   local expected = torch.zeros(m, n, o)
+   for i = 1, idx_size[1] do
+      for j = 1, idx_size[2] do
+         for k = 1, idx_size[3] do
+            local ii = {i, j, k}
+            ii[dim] = idx[i][j][k]
+           expected[ii] = src[i][j][k]
+         end
+      end
+   end
+   mytester:assertTensorEq(actual, expected, 0, "Wrong values for scatter")
+
+   idx[1][1][1] = 34
+   mytester:assertError(function() torch.zeros(m, n, o):scatter(dim, idx, src) end,
+                        "Invalid index not detected")
+end
+
+function torchtest.scatterFill()
+   local m, n, o = torch.random(10, 20), torch.random(10, 20), torch.random(10, 20)
+   local elems_per_row = torch.random(10)
+   local dim = torch.random(3)
+
+   local val = torch.uniform()
+   local idx_size = {m, n, o}
+   idx_size[dim] = elems_per_row
+   local idx = torch.LongTensor():resize(unpack(idx_size))
+   fillIdx(idx, dim, ({m, n, o})[dim], elems_per_row, m, n, o)
+
+   local actual = torch.zeros(m, n, o):scatter(dim, idx, val)
+   local expected = torch.zeros(m, n, o)
+   for i = 1, idx_size[1] do
+      for j = 1, idx_size[2] do
+         for k = 1, idx_size[3] do
+            local ii = {i, j, k}
+            ii[dim] = idx[i][j][k]
+            expected[ii] = val
+         end
+      end
+   end
+   mytester:assertTensorEq(actual, expected, 0, "Wrong values for scatter")
+
+   idx[1][1][1] = 28
+   mytester:assertError(function() torch.zeros(m, n, o):scatter(dim, idx, val) end,
+                        "Invalid index not detected")
+end
+
 function torchtest.maskedCopy()
    local nCopy, nDest = 3, 10
    local dest = torch.randn(nDest)
@@ -1799,14 +1946,14 @@ function torchtest.maskedCopy()
    mytester:assertTensorEq(dest, dest2, 0.000001, "maskedCopy error")
 
    -- make source bigger than number of 1s in mask
-   src = torch.randn(nDest) 
+   src = torch.randn(nDest)
    local ok = pcall(dest.maskedCopy, dest, mask, src)
-   mytester:assert(ok, "maskedCopy incorrect complaint when" 
+   mytester:assert(ok, "maskedCopy incorrect complaint when"
 		      .. " src is bigger than mask's one count")
-   
+
    src = torch.randn(nCopy - 1) -- make src smaller. this should fail
    local ok = pcall(dest.maskedCopy, dest, mask, src)
-   mytester:assert(not ok, "maskedCopy not erroring when" 
+   mytester:assert(not ok, "maskedCopy not erroring when"
 		      .. " src is smaller than mask's one count")
 end
 
@@ -2120,6 +2267,18 @@ function torchtest.serialize()
    serStorage = torch.serializeToStorage(tensObj)
    mytester:assertTensorEq(tensObj, torch.deserialize(serString), 1e-10)
    mytester:assertTensorEq(tensObj, torch.deserializeFromStorage(serStorage), 1e-10)
+end
+
+function torchtest.storageview()
+   local s1 = torch.LongStorage({3, 4, 5})
+   local s2 = torch.LongStorage(s1, 2)
+
+   mytester:assert(s2:size() == 2, "should be size 2")
+   mytester:assert(s2[1] == s1[2], "should have 4 at position 1")
+   mytester:assert(s2[2] == s1[3], "should have 5 at position 2")
+
+   s2[1] = 13
+   mytester:assert(13 == s1[2], "should have 13 at position 1")
 end
 
 function torch.test(tests)
