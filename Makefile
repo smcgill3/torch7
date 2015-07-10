@@ -51,8 +51,11 @@ CFLAGS= \
 	-fomit-frame-pointer \
 	-DTH_EXPORTS -DHAVE_MMAP=1 \
 	-DUSE_SSE3 -DUSE_SSE2 -DNDEBUG \
-	-DC_HAS_THREAD -DTH_HAVE_THREAD \
-	-march=native -mtune=native
+	-DTH_HAVE_THREAD \
+	-DUSE_GCC_ATOMICS=1 \
+	-march=native -mtune=native \
+#-DC_HAS_THREAD
+
 #-Wall -Wno-unused-function -Wno-unknown-pragmas
 
 ifndef OSTYPE 
