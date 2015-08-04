@@ -290,19 +290,39 @@ accreal THTensor_(dot)(THTensor *tensor, THTensor *src)
 real THTensor_(minall)(THTensor *tensor)
 {
   real theMin;
+  real value;
+
   THArgCheck(tensor->nDimension > 0, 1, "tensor must have one dimension");
   theMin = THTensor_(data)(tensor)[0];
-  TH_TENSOR_APPLY(real, tensor, if(*tensor_data < theMin) theMin = *tensor_data;);
-  return theMin; 
+  TH_TENSOR_APPLY(real, tensor,
+                  value = *tensor_data;
+                  /* This is not the same as value<theMin in the case of NaNs */
+                  if(!(value >= theMin))
+                  {
+                    theMin = value;
+                    if (isnan(value))
+                      break;
+                  });
+  return theMin;
 }
 
 real THTensor_(maxall)(THTensor *tensor)
 {
   real theMax;
+  real value;
+
   THArgCheck(tensor->nDimension > 0, 1, "tensor must have one dimension");
   theMax = THTensor_(data)(tensor)[0];
-  TH_TENSOR_APPLY(real, tensor, if(*tensor_data > theMax) theMax = *tensor_data;);
-  return theMax; 
+  TH_TENSOR_APPLY(real, tensor,
+                  value = *tensor_data;
+                  /* This is not the same as value>theMax in the case of NaNs */
+                  if(!(value <= theMax))
+                  {
+                    theMax = value;
+                    if (isnan(value))
+                      break;
+                  });
+  return theMax;
 }
 
 accreal THTensor_(sumall)(THTensor *tensor)
@@ -624,12 +644,14 @@ void THTensor_(addmm)(THTensor *r_, real beta, THTensor *t, real alpha, THTensor
 /*  printf("%ldx%ld = %ldx%ld X %ldx%ld\n", r_->size[0], r_->size[1], m1->size[0], m1->size[1], m2->size[0], m2->size[1]); */
 
   /* r_ */
-  if(r_->stride[0] == 1)
+  if(r_->stride[0] == 1 &&
+     r_->stride[1] != 0)
   {
     transpose_r = 'n';
     r__ = r_;
   }
-  else if(r_->stride[1] == 1)
+  else if(r_->stride[1] == 1 &&
+          r_->stride[0] != 0)
   {
     THTensor *swap = m2;
     m2 = m1;
@@ -647,12 +669,14 @@ void THTensor_(addmm)(THTensor *r_, real beta, THTensor *t, real alpha, THTensor
   }
 
   /* m1 */
-  if(m1->stride[(transpose_r == 'n' ? 0 : 1)] == 1)
+  if(m1->stride[(transpose_r == 'n' ? 0 : 1)] == 1 &&
+     m1->stride[(transpose_r == 'n' ? 1 : 0)] != 0)
   {
     transpose_m1 = 'n';
     m1_ = m1;
   }
-  else if(m1->stride[(transpose_r == 'n' ? 1 : 0)] == 1)
+  else if(m1->stride[(transpose_r == 'n' ? 1 : 0)] == 1 &&
+          m1->stride[(transpose_r == 'n' ? 0 : 1)] != 0)
   {
     transpose_m1 = 't';
     m1_ = m1;
@@ -664,12 +688,14 @@ void THTensor_(addmm)(THTensor *r_, real beta, THTensor *t, real alpha, THTensor
   }
 
   /* m2 */
-  if(m2->stride[(transpose_r == 'n' ? 0 : 1)] == 1)
+  if(m2->stride[(transpose_r == 'n' ? 0 : 1)] == 1 &&
+     m2->stride[(transpose_r == 'n' ? 1 : 0)] != 0)
   {
     transpose_m2 = 'n';
     m2_ = m2;
   }
-  else if(m2->stride[(transpose_r == 'n' ? 1 : 0)] == 1)
+  else if(m2->stride[(transpose_r == 'n' ? 1 : 0)] == 1 &&
+          m2->stride[(transpose_r == 'n' ? 0 : 1)] != 0)
   {
     transpose_m2 = 't';
     m2_ = m2;
@@ -848,6 +874,9 @@ long THTensor_(numel)(THTensor *t)
 void THTensor_(max)(THTensor *values_, THLongTensor *indices_, THTensor *t, int dimension)
 {
   THLongStorage *dim;
+  real theMax;
+  real value;
+  long theIndex;
   long i;
 
   THArgCheck(dimension >= 0 && dimension < THTensor_(nDimension)(t), 2, "dimension %d out of range",
@@ -860,24 +889,31 @@ void THTensor_(max)(THTensor *values_, THLongTensor *indices_, THTensor *t, int 
   THLongStorage_free(dim);
 
   TH_TENSOR_DIM_APPLY3(real, t, real, values_, long, indices_, dimension,
-                       long theIndex = 0;
-                       real theMax = t_data[0];
-                       for(i = 1; i < t_size; i++)
+                       theMax = t_data[0];
+                       theIndex = 0;
+
+                       for(i = 0; i < t_size; i++)
                        {
-                         if(t_data[i*t_stride] > theMax)
+                         value = t_data[i*t_stride];
+                         /* This is not the same as value>theMax in the case of NaNs */
+                         if(!(value <= theMax))
                          {
                            theIndex = i;
-                           theMax = t_data[i*t_stride];
+                           theMax = value;
+                           if (isnan(value))
+                             break;
                          }
                        }
                        *indices__data = theIndex;
-                       *values__data = theMax;);  
-
+                       *values__data = theMax;);
 }
 
 void THTensor_(min)(THTensor *values_, THLongTensor *indices_, THTensor *t, int dimension)
 {
   THLongStorage *dim;
+  real theMin;
+  real value;
+  long theIndex;
   long i;
 
   THArgCheck(dimension >= 0 && dimension < THTensor_(nDimension)(t), 2, "dimension %d out of range",
@@ -890,19 +926,23 @@ void THTensor_(min)(THTensor *values_, THLongTensor *indices_, THTensor *t, int 
   THLongStorage_free(dim);
 
   TH_TENSOR_DIM_APPLY3(real, t, real, values_, long, indices_, dimension,
-                       long theIndex = 0;
-                       real theMin = t_data[0];
-                       for(i = 1; i < t_size; i++)
+                       theMin = t_data[0];
+                       theIndex = 0;
+
+                       for(i = 0; i < t_size; i++)
                        {
-                         if(t_data[i*t_stride] < theMin)
+                         value = t_data[i*t_stride];
+                         /* This is not the same as value<theMin in the case of NaNs */
+                         if(!(value >= theMin))
                          {
                            theIndex = i;
-                           theMin = t_data[i*t_stride];
+                           theMin = value;
+                           if (isnan(value))
+                             break;
                          }
                        }
                        *indices__data = theIndex;
-                       *values__data = theMin;);  
-
+                       *values__data = theMin;);
 }
 
 
@@ -1064,6 +1104,30 @@ void THTensor_(cross)(THTensor *r_, THTensor *a, THTensor *b, int dimension)
                        r__data[0*r__stride] = a_data[1*a_stride]*b_data[2*b_stride] - a_data[2*a_stride]*b_data[1*b_stride];
                        r__data[1*r__stride] = a_data[2*a_stride]*b_data[0*b_stride] - a_data[0*a_stride]*b_data[2*b_stride];
                        r__data[2*r__stride] = a_data[0*a_stride]*b_data[1*b_stride] - a_data[1*a_stride]*b_data[0*b_stride];);
+}
+
+void THTensor_(cmax)(THTensor *r, THTensor *t, THTensor *src) {
+  THTensor_(resizeAs)(r, t);
+  TH_TENSOR_APPLY3(real, r, real, t, real, src,
+                   *r_data = *t_data > *src_data ? *t_data : *src_data;);
+}
+
+void THTensor_(cmin)(THTensor *r, THTensor *t, THTensor *src) {
+  THTensor_(resizeAs)(r, t);
+  TH_TENSOR_APPLY3(real, r, real, t, real, src,
+                   *r_data = *t_data < *src_data ? *t_data : *src_data;);
+}
+
+void THTensor_(cmaxValue)(THTensor *r, THTensor *t, real value) {
+  THTensor_(resizeAs)(r, t);
+  TH_TENSOR_APPLY2(real, r, real, t,
+                   *r_data = *t_data > value ? *t_data : value;);
+}
+
+void THTensor_(cminValue)(THTensor *r, THTensor *t, real value) {
+  THTensor_(resizeAs)(r, t);
+  TH_TENSOR_APPLY2(real, r, real, t,
+                   *r_data = *t_data < value ? *t_data : value;);
 }
 
 void THTensor_(zeros)(THTensor *r_, THLongStorage *size)

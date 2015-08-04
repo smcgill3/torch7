@@ -101,7 +101,7 @@ Example:
 ```
 
 <a name="torch.Storage"/>
-### torch.TYPEStorage(filename [, shared [, size]]) ###
+### torch.TYPEStorage(filename [, shared [, size [, sharedMem]]]) ###
 <a name="__torch.StorageMap"/>
 
 Returns a new kind of `Storage` which maps the contents of the given
@@ -133,6 +133,11 @@ If `size` is not specified then the [size](#torch.Storage.size) of the returned
 (size of file in byte)/(size of TYPE)
 ```
 elements.
+
+if `sharedMem` is true then, the file will be created (or mapped from) the shared
+memory area using [`shm_open()`](http://linux.die.net/man/3/shm_open). On Linux systems 
+this is implemented at `/dev/shm` partition on RAM for interprocess communication.
+
 
 Example:
 ```lua

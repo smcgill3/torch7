@@ -21,7 +21,7 @@
 # define TH_EXTERNC extern
 #endif
 
-#ifdef WIN32
+#ifdef _WIN32
 # ifdef TH_EXPORTS
 #  define TH_API TH_EXTERNC __declspec(dllexport)
 # else
@@ -52,6 +52,9 @@ TH_API void THSetArgErrorHandler( void (*torchArgErrorHandlerFunction)(int argNu
 TH_API void* THAlloc(long size);
 TH_API void* THRealloc(void *ptr, long size);
 TH_API void THFree(void *ptr);
+TH_API void THSetGCHandler( void (*torchGCHandlerFunction)(void *data), void *data );
+// this hook should only be called by custom allocator functions
+TH_API void THHeapUpdate(long size);
 
 #define THError(...) _THError(__FILE__, __LINE__, __VA_ARGS__)
 #define THArgCheck(...) _THArgCheck(__FILE__, __LINE__, __VA_ARGS__)
@@ -89,7 +92,7 @@ do {                                                                  \
 #define THMin(X, Y)  ((X) < (Y) ? (X) : (Y))
 #define THMax(X, Y)  ((X) > (Y) ? (X) : (Y))
 
-#ifdef _MSC_VER
+#if (defined(_MSC_VER) || defined(__MINGW32__))
 # define log1p(x) THLog1p(x)
 #define snprintf _snprintf
 #define popen _popen

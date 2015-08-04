@@ -457,6 +457,18 @@ for _,Tensor in ipairs({"ByteTensor", "CharTensor",
             {name="index"}})
    end
 
+   for _,name in ipairs({"cmin", "cmax"}) do
+      wrap(name,
+           cname(name),
+           {{name=Tensor, default=true, returned=true},
+            {name=Tensor, method={default=1}},
+            {name=Tensor}},
+           cname(name .. "Value"),
+           {{name=Tensor, default=true, returned=true},
+            {name=Tensor, method={default=1}},
+            {name=real}})
+   end
+
    wrap("trace",
         cname("trace"),
         {{name=Tensor},
@@ -1024,6 +1036,24 @@ static void THTensor_random1__(THTensor *self, THGenerator *gen, long b)
                          {name=Tensor}}
                      )
       end
+      interface:wrap("trtrs",
+                     cname("trtrs"),
+                     {{name=Tensor, returned=true},
+                      {name=Tensor, returned=true},
+                      {name=Tensor},
+                      {name=Tensor},
+                      {name='charoption', values={'U', 'L'}, default='U'},  -- uplo
+                      {name='charoption', values={'N', 'T'}, default='N'},  -- trans
+                      {name='charoption', values={'N', 'U'}, default='N'}}, -- diag
+                     cname("trtrs"),
+                     {{name=Tensor, default=true, returned=true, invisible=true},
+                      {name=Tensor, default=true, returned=true, invisible=true},
+                      {name=Tensor},
+                      {name=Tensor},
+                      {name='charoption', values={'U', 'L'}, default='U'},  -- uplo
+                      {name='charoption', values={'N', 'T'}, default='N'},  -- trans
+                      {name='charoption', values={'N', 'U'}, default='N'}}  -- diag
+                  )
 
       interface:wrap("symeig",
                      cname("syev"),
