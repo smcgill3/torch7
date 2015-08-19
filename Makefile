@@ -20,6 +20,20 @@ TORCH_SOURCES=\
 	lib/TH/THRandom.c \
 	lib/TH/THStorage.c \
 	lib/TH/THTensor.c \
+	lib/TH/generic/THBlas.c \
+	lib/TH/generic/THLapack.c \
+	lib/TH/generic/THStorage.c \
+	lib/TH/generic/THStorageCopy.c \
+	lib/TH/generic/THTensor.c \
+	lib/TH/generic/THTensorConv.c \
+	lib/TH/generic/THTensorCopy.c \
+	lib/TH/generic/THTensorLapack.c \
+	lib/TH/generic/THTensorMath.c \
+	lib/TH/generic/THTensorRandom.c \
+	lib/TH/generic/THVector.c \
+	lib/TH/generic/simd/convolve.c \
+	lib/TH/generic/simd/convolve5x5_sse.c \
+	lib/TH/generic/simd/convolve5x5_avx.c \
 	lib/luaT/luaT.c \
   Generator.c \
 	DiskFile.c \
@@ -54,11 +68,10 @@ CFLAGS= \
 	-DTH_HAVE_THREAD \
 	-DUSE_GCC_ATOMICS=1 \
 	-march=native -mtune=native \
-#-DC_HAS_THREAD
+	-ffast-math \
+	-Werror=implicit-function-declaration -Werror=format
 
-#-Wall -Wno-unused-function -Wno-unknown-pragmas
-
-ifndef OSTYPE 
+ifndef OSTYPE
 	OSTYPE = $(shell uname -s|awk '{print tolower($$0)}')
 endif
 
@@ -66,11 +79,14 @@ ifeq ($(OSTYPE),darwin)
 CC=clang
 LD=ld -macosx_version_min 10.8
 SED=sed -i '' -e
-LDFLAGS=-undefined dynamic_lookup \
+LDFLAGS= \
+	-undefined dynamic_lookup \
 	-framework Accelerate \
 	-lm \
 	-L/usr/local/lib
-CFLAGS+=-msse4.2 -DUSE_SSE4_2 \
+CFLAGS+= \
+	-mavx -DUSE_AVX \
+	-msse4.2 -DUSE_SSE4_2 \
 	-msse4.1 -DUSE_SSE4_1 \
 	-FAccelerate
 else
@@ -91,7 +107,7 @@ prep:
 
 .c.o:
 	cc $(CFLAGS) $< -o $@
-	
+
 clean:
 	rm -f $(TORCH_OBJECTS)
 	rm -f *.so *.dylib
@@ -110,14 +126,15 @@ libtorch: $(TORCH_OBJECTS)
 	$(LD) -dylib $^ $(LDFLAGS) -o $@.dylib
 
 install: libtorch
-	mkdir -p /usr/local/include/torch/TH/generic
-	cp lib/luaT/luaT.h /usr/local/include/torch/
-	cp lib/TH/*.h /usr/local/include/torch/TH/
-	cp lib/TH/generic/* /usr/local/include/torch/TH/generic/
 	mkdir -p /usr/local/lib/lua/5.1
 	cp *.so /usr/local/lib/lua/5.1/
 	cp *.dylib /usr/local/lib/
-
+	mkdir -p /usr/local/include/torch/TH/generic
+	cp lib/luaT/luaT.h /usr/local/include/torch/
+	cp lib/TH/*.h /usr/local/include/torch/TH/
+	cp lib/TH/generic/*.h /usr/local/include/torch/TH/generic/
+	mkdir -p /usr/local/include/torch/TH/generic/simd
+	cp lib/TH/generic/simd/*.h /usr/local/include/torch/TH/generic/simd/
 else
 # Linux linking and installation
 
@@ -125,11 +142,12 @@ libtorch: $(TORCH_OBJECTS)
 	$(LD) $^ $(LDFLAGS) -o $@.so
 
 install: libtorch
-	mkdir -p /usr/local/include/torch/TH/generic
-	cp lib/luaT/luaT.h /usr/local/include/torch/
-	cp lib/TH/*.h /usr/local/include/torch/TH/
-	cp lib/TH/generic/* /usr/local/include/torch/TH/generic/
 	mkdir -p /usr/local/lib/lua/5.1
 	cp *.so /usr/local/lib/lua/5.1/
 	cp *.so /usr/local/lib/
+	mkdir -p /usr/local/include/torch/TH/generic
+	cp lib/luaT/luaT.h /usr/local/include/torch/
+	cp lib/TH/*.h /usr/local/include/torch/TH/
+	mkdir -p /usr/local/include/torch/TH/generic/simd/
+	cp lib/TH/generic/simd/*.h /usr/local/include/torch/TH/generic/simd/
 endif
