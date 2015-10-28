@@ -148,6 +148,7 @@ install: libtorch
 	cp lib/TH/generic/*.h /usr/local/include/torch/TH/generic/
 	mkdir -p /usr/local/include/torch/TH/generic/simd
 	cp lib/TH/generic/simd/*.h /usr/local/include/torch/TH/generic/simd/
+	cp lib/TH/generic/THVector.c /usr/local/include/torch/TH/generic
 else
 # Linux linking and installation
 
@@ -163,4 +164,5 @@ install: libtorch
 	cp lib/TH/*.h /usr/local/include/torch/TH/
 	mkdir -p /usr/local/include/torch/TH/generic/simd/
 	cp lib/TH/generic/simd/*.h /usr/local/include/torch/TH/generic/simd/
+	cp lib/TH/generic/THVector.c /usr/local/include/torch/TH/generic
 endif
