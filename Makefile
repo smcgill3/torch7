@@ -55,10 +55,6 @@ CFLAGS= \
 	-std=c99 -pedantic \
 	-c \
 	-I/usr/local/include \
-	-I/usr/include/lua \
-	-I/usr/include/lua5.1 \
-	-I/usr/local/include/lua5.1 \
-	-I/usr/local/include/luajit-2.1 \
 	-Ilib/luaT -Ilib/TH -I. \
 	-O3 -fpic\
 	-fno-stack-protector \
@@ -71,13 +67,30 @@ CFLAGS= \
 	-ffast-math \
 	-Werror=implicit-function-declaration -Werror=format
 
+LUA_VERSION=5.1
+LUAJIT_VERSION=2.1
+
+ifeq ($(shell pkg-config --exists luajit && echo 0),0)
+LUA_INC=`pkg-config luajit --cflags-only-I`
+#LUA_LIB=`pkg-config luajit --libs`
+else ifeq ($(shell pkg-config --exists lua$(LUA_VERSION) && echo 0),0)
+LUA_INC=`pkg-config lua$(LUA_VERSION) --cflags-only-I`
+#LUA_LIB=`pkg-config lua$(LUA_VERSION) --libs`
+else
+LUA_INC = -I/usr/include/lua \
+	-I/usr/include/lua5.1 \
+	-I/usr/local/include/lua5.1 \
+	-I/usr/local/include/luajit-2.1
+endif
+CFLAGS+=$(LUA_INC)
+
 ifndef OSTYPE
 	OSTYPE = $(shell uname -s|awk '{print tolower($$0)}')
 endif
 
 ifeq ($(OSTYPE),darwin)
 CC=clang
-LD=ld -macosx_version_min 10.8
+LD=ld -macosx_version_min 10.10
 SED=sed -i '' -e
 LDFLAGS= \
 	-undefined dynamic_lookup \
