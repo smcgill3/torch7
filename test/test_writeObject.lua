@@ -1,3 +1,5 @@
+require 'torch'
+
 local myTester = torch.Tester()
 
 local tests = {}
@@ -67,6 +69,12 @@ function tests.test_a_tensor()
    local x = torch.rand(5, 10)
    local xcopy = serializeAndDeserialize(x)
    myTester:assert(x:norm() == xcopy:norm(), 'tensors should be the same')
+end
+
+-- Regression test for bug reported in issue 456.
+function tests.test_empty_table()
+   local file = torch.MemoryFile()
+   file:writeObject({})
 end
 
 myTester:add(tests)
