@@ -49,7 +49,12 @@ end
 function File:referenced(ref)
    -- we use an environment to keep a record of written objects
    if not torch.getenv(self).writeObjects then
-      torch.setenv(self, {writeObjects={}, writeObjectsRef={}, readObjects={}})
+      torch.setenv(self, {
+            writeObjects={}, writeObjectsRef={},
+            readObjects={},
+            objectNameStack={},
+            upvalueRefToId={}, upvalueIdToClosure={},
+         })
    end
    local env = torch.getenv(self)
    env.force = not ref
@@ -87,10 +92,27 @@ local function getmetamethod(obj, name)
    end
 end
 
-function File:writeObject(object)
+local UPVALUES_TOKEN = {} -- unique object
+local function formatStack(objectNameStack)
+   -- Format object name stack skipping UPVALUES_TOKEN and upvalue index
+   local parts = {}
+   for i, v in ipairs(objectNameStack) do
+      if v ~= UPVALUES_TOKEN and objectNameStack[i-1] ~= UPVALUES_TOKEN then
+         table.insert(parts, v)
+      end
+   end
+   return table.concat(parts, '.')
+end
+
+function File:writeObject(object, debugname)
    -- we use an environment to keep a record of written objects
    if not torch.getenv(self).writeObjects then
-      torch.setenv(self, {writeObjects={}, writeObjectsRef={}, readObjects={}})
+      torch.setenv(self, {
+            writeObjects={}, writeObjectsRef={},
+            readObjects={},
+            objectNameStack={},
+            upvalueRefToId={}, upvalueIdToClosure={},
+         })
    end
 
    local force = torch.getenv(self).force
@@ -101,10 +123,13 @@ function File:writeObject(object)
       return
    end
 
+   local objectNameStack = torch.getenv(self).objectNameStack
+   table.insert(objectNameStack, debugname or '<?>')
+
    -- check the type we are dealing with
    local typeidx = self:isWritableObject(object)
    if not typeidx then
-      error(string.format('Unwritable object <%s>', type(object)))
+      error(string.format('Unwritable object <%s> at %s', type(object), formatStack(objectNameStack)))
    end
    self:writeInt(typeidx)
 
@@ -136,6 +161,10 @@ function File:writeObject(object)
          self:writeInt(index)
          objects.nWriteObject = index
          if typeidx == TYPE_RECUR_FUNCTION then
+            local upvalueRefToId = torch.getenv(self).upvalueRefToId
+            -- Unique ID for each ref since lightuserdata are not serializable
+            local nextId = 1
+            for _ in pairs(upvalueRefToId) do nextId=nextId+1 end
             local upvalues = {}
             local counter = 0
             while true do
@@ -143,13 +172,23 @@ function File:writeObject(object)
                local name,value = debug.getupvalue(object, counter)
                if not name then break end
                if name == '_ENV' then value = nil end
-               table.insert(upvalues, {name=name, value=value})
+               local id=nil
+               -- debug.upvalueid exists only for lua>=5.2 and luajit
+               if debug.upvalueid then
+                  local upvalueRef = debug.upvalueid(object, counter)
+                  if not upvalueRefToId[upvalueRef] then
+                     upvalueRefToId[upvalueRef] = nextId
+                     nextId = nextId + 1
+                  end
+                  id = upvalueRefToId[upvalueRef]
+               end
+               table.insert(upvalues, {name=name, id=id, value=value})
             end
             local dumped = string.dump(object)
             local stringStorage = torch.CharStorage():string(dumped)
             self:writeInt(#stringStorage)
             self:writeChar(stringStorage)
-            self:writeObject(upvalues)
+            self:writeObject(upvalues, UPVALUES_TOKEN)
          elseif typeidx == TYPE_TORCH then
             local version   = torch.CharStorage():string('V ' .. torch.version(object))
             local className = torch.CharStorage():string(torch.typename(object))
@@ -166,31 +205,43 @@ function File:writeObject(object)
                   if self:isWritableObject(v) then
                      var[k] = v
                   else
-                     print(string.format('$ Warning: cannot write object field <%s>', k))
+                     print(string.format('$ Warning: cannot write object field <%s> of <%s> %s', k, torch.typename(object), formatStack(objectNameStack)))
                   end
                end
-               self:writeObject(var)
+               self:writeObject(var, torch.typename(object))
             else
-               error(string.format('<%s> is a non-serializable Torch object', torch.typename(object)))
+               error(string.format('<%s> is a non-serializable Torch object %s', torch.typename(object), formatStack(objectNameStack)))
             end
          else -- it is a table
             local size = 0; for k,v in pairs(object) do size = size + 1 end
             self:writeInt(size)
             for k,v in pairs(object) do
                self:writeObject(k)
-               self:writeObject(v)
+               local name = (type(k) == 'string' or type(k) == 'number') and tostring(k) or nil
+               -- special case name for upvalues
+               if objectNameStack[#objectNameStack-1] == UPVALUES_TOKEN and
+                  name == 'value' and type(object.name) == 'string' then
+                  name = object.name
+               end
+               self:writeObject(v, name)
             end
          end
       end
    else
       error('Unwritable object')
    end
+   table.remove(objectNameStack)
 end
 
 function File:readObject()
    -- we use an environment to keep a record of read objects
    if not torch.getenv(self).writeObjects then
-      torch.setenv(self, {writeObjects={}, writeObjectsRef={}, readObjects={}})
+      torch.setenv(self, {
+            writeObjects={}, writeObjectsRef={},
+            readObjects={},
+            objectNameStack={},
+            upvalueRefToId={}, upvalueIdToClosure={},
+         })
    end
 
    local force = torch.getenv(self).force
@@ -243,6 +294,7 @@ function File:readObject()
          if not force then
              objects[index] = func
          end
+         local upvalueIdToClosure = torch.getenv(self).upvalueIdToClosure
          local upvalues = self:readObject()
          for index,upvalue in ipairs(upvalues) do
             if typeidx == LEGACY_TYPE_RECUR_FUNCTION then
@@ -251,6 +303,20 @@ function File:readObject()
                debug.setupvalue(func, index, _ENV)
             else
                debug.setupvalue(func, index, upvalue.value)
+               -- debug.upvaluejoin exists only for lua>=5.2 and luajit
+               if debug.upvaluejoin and upvalue.id then
+                  if upvalueIdToClosure[upvalue.id] then
+                     -- This upvalue is linked to another one
+                     local otherClosure = upvalueIdToClosure[upvalue.id]
+                     debug.upvaluejoin(func, index, otherClosure.func, otherClosure.index)
+                  else
+                     -- Save this closure for next time
+                     upvalueIdToClosure[upvalue.id] = {
+                        func = func,
+                        index = index,
+                     }
+                  end
+               end
             end
          end
          return func

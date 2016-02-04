@@ -162,6 +162,31 @@ function torchtest.sqrt()
    mytester:assertlt(maxerrnc, precision, 'error in torch.functionname - non-contiguous')
 end
 
+function torchtest.sigmoid()
+   -- cant use genericSingleOpTest, since `math.sigmoid` doesnt exist, have to use
+   -- `torch.sigmoid` instead
+   local inputValues = {-1000,-1,0,0.5,1,2,1000}
+   local expectedOutput = {0.0000, 0.2689, 0.5, 0.6225, 0.7311, 0.8808, 1.000}
+
+   local precision_4dps = 0.0002
+
+   -- float
+   local inputFT = torch.FloatTensor(inputValues)
+   local expectedFT = torch.FloatTensor(expectedOutput)
+   mytester:assertlt((torch.sigmoid(inputFT) - expectedFT):abs():max(), precision_4dps, 'error in torch.sigmoid - single')
+   mytester:assertlt((inputFT - torch.FloatTensor(inputValues)):abs():max(), precision_4dps, 'error in torch.sigmoid - single')
+   local sigmoidFT = torch.FloatTensor(inputValues):sigmoid()
+   mytester:assertlt((sigmoidFT - expectedFT):abs():max(), precision_4dps, 'error in torch.sigmoid - single')
+
+   -- double
+   local inputDT = torch.DoubleTensor(inputValues)
+   local expectedDT = torch.DoubleTensor(expectedOutput)
+   mytester:assertlt((torch.sigmoid(inputDT) - expectedDT):abs():max(), precision_4dps, 'error in torch.sigmoid - double')
+   mytester:assertlt((inputDT - torch.DoubleTensor(inputValues)):abs():max(), precision_4dps, 'error in torch.sigmoid - double')
+   local sigmoidDT = torch.DoubleTensor(inputValues):sigmoid()
+   mytester:assertlt((sigmoidDT - expectedDT):abs():max(), precision_4dps, 'error in torch.sigmoid - double')
+end
+
 function torchtest.exp()
    local f = loadstring(string.gsub(genericSingleOpTest, 'functionname', 'exp'))
    local maxerrc, maxerrnc = f()
@@ -539,6 +564,22 @@ function torchtest.neg()
    res_neg:neg()
 
    mytester:assertlt((res_add - res_neg):abs():max(), 0.00001)
+
+   local _ = torch.setRNGState(rngState)
+end
+
+function torchtest.cinv()
+   local rngState = torch.getRNGState()
+   torch.manualSeed(123)
+
+   local a = torch.randn(100,89)
+   local zeros = torch.Tensor():resizeAs(a):zero()
+
+   local res_pow = torch.pow(a, -1)
+   local res_inv = a:clone()
+   res_inv:cinv()
+
+   mytester:assertlt((res_pow - res_inv):abs():max(), 0.00001)
 
    local _ = torch.setRNGState(rngState)
 end
@@ -1309,6 +1350,71 @@ function torchtest.sortDescending()
 
    -- Test that we still have proper sorting with duplicate keys
    assertIsOrdered('descending', x, mxx, ixx, 'random with duplicate keys')
+end
+
+function torchtest.topK()
+   local function topKViaSort(t, k, dim, dir)
+      local sorted, indices = t:sort(dim, dir)
+      return sorted:narrow(dim, 1, k), indices:narrow(dim, 1, k)
+   end
+
+   local function compareTensors(t, res1, ind1, res2, ind2, msg)
+      -- Values should be exactly equivalent
+      mytester:assertTensorEq(res1, res2, 0, msg)
+
+      -- Indices might differ based on the implementation, since there is
+      -- no guarantee of the relative order of selection
+      if ind1:eq(ind2):min() == 0 then
+         -- To verify that the indices represent equivalent elements,
+         -- gather from the input using the topk indices and compare against
+         -- the sort indices
+         local vals = t:gather(dim, ind2)
+         mytester:assertTensorEq(res1, vals, 0, msg)
+      end
+   end
+
+   local function compare(t, k, dim, dir, msg)
+      local topKVal, topKInd = t:topk(k, dim, dir)
+      local sortKVal, sortKInd = topKViaSort(t, k, dim, dir)
+
+      compareTensors(t, sortKVal, sortKInd, topKVal, topKInd, msg)
+   end
+
+   local t = torch.rand(math.random(1, msize),
+                        math.random(1, msize),
+                        math.random(1, msize))
+
+   for kTries = 1, 3 do
+      for dimTries = 1, 3 do
+         for _, transpose in ipairs({true, false}) do
+            for _, dir in ipairs({true, false}) do
+               local testTensor = t
+
+               local transposeMsg = nil
+               if transpose then
+                  local dim1 = math.random(1, t:nDimension())
+                  local dim2 = dim1
+
+                  while dim1 == dim2 do
+                     dim2 = math.random(1, t:nDimension())
+                  end
+
+                  testTensor = t:transpose(dim1, dim2)
+                  transposeMsg = 'transpose(' .. dim1 .. ', ' .. dim2 .. ')'
+               end
+
+               local dim = math.random(1, testTensor:nDimension())
+               local k = math.random(1, testTensor:size(dim))
+               local msg = 'topk(' .. k .. ', ' .. dim .. ', ' .. tostring(dir) .. ', true)'
+               if transposeMsg then
+                  msg = msg .. ' ' .. transposeMsg
+               end
+
+               compare(testTensor, k, dim, dir, msg)
+            end
+         end
+      end
+   end
 end
 
 function torchtest.kthvalue()
@@ -2213,6 +2319,51 @@ function torchtest.potri()
    chol = torch.potrf(a, 'L')
    inv1 = torch.potri(chol, 'L')
    mytester:assertlt(inv0:dist(inv1),1e-12,"torch.potri; uplo='L'")
+end
+
+function torchtest.pstrf()
+  local function checkPsdCholesky(a, uplo, inplace)
+    local u, piv, args, a_reconstructed
+    if inplace then
+      u = torch.Tensor(a:size())
+      piv = torch.IntTensor(a:size(1))
+      args = {u, piv, a}
+    else
+      args = {a}
+    end
+
+    if uplo then table.insert(args, uplo) end
+
+    u, piv = torch.pstrf(unpack(args))
+
+    if uplo == 'L' then
+      a_reconstructed = torch.mm(u, u:t())
+    else
+      a_reconstructed = torch.mm(u:t(), u)
+    end
+
+    piv = piv:long()
+    local a_permuted = a:index(1, piv):index(2, piv)
+    mytester:assertTensorEq(a_permuted, a_reconstructed, 1e-14,
+                            'torch.pstrf did not allow rebuilding the original matrix;' ..
+                            'uplo=' .. tostring(uplo))
+  end
+
+  local dimensions = { {5, 1}, {5, 3}, {5, 5}, {10, 10} }
+  for _, dim in pairs(dimensions) do
+    local m = torch.Tensor(unpack(dim)):uniform()
+    local a = torch.mm(m, m:t())
+    -- add a small number to the diagonal to make the matrix numerically positive semidefinite
+    for i = 1, m:size(1) do
+      a[i][i] = a[i][i] + 1e-7
+    end
+    checkPsdCholesky(a, nil, false)
+    checkPsdCholesky(a, 'U', false)
+    checkPsdCholesky(a, 'L', false)
+    checkPsdCholesky(a, nil, true)
+    checkPsdCholesky(a, 'U', true)
+    checkPsdCholesky(a, 'L', true)
+  end
 end
 
 function torchtest.testNumel()

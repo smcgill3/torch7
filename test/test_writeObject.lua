@@ -77,5 +77,78 @@ function tests.test_empty_table()
    file:writeObject({})
 end
 
+function tests.test_error_msg()
+   local torch = torch
+   local inner = {
+       baz = function(a) torch.somefunc() end
+   }
+   local outer = {
+       theinner = inner
+   }
+   local function evil_func()
+      outer.prop = 1
+      image.compress(1)
+   end
+   local ok, msg = pcall(torch.save, 'saved.t7', evil_func)
+   myTester:assert(not ok)
+   myTester:assert(msg:find('at <%?>%.outer%.theinner%.baz%.torch'))
+end
+
+function tests.test_warning_msg()
+  local foo = {}
+  torch.class('Bar', foo)
+
+  local obj = foo.Bar()
+  local tensor = torch.Tensor()
+  obj.data = tensor:cdata() -- pick something NOT writable
+
+  local file = torch.MemoryFile('rw'):binary()
+  local ok, _ = pcall(torch.File.writeObject, file, obj)
+  -- only a warning is printed on STDOUT:
+  --   $ Warning: cannot write object field <data> of <Bar> <?>
+  myTester:assert(ok)
+  file:close()
+end
+
+function tests.test_referenced()
+   local file = torch.MemoryFile('rw'):binary()
+   file:referenced(false)
+
+   local foo = 'bar'
+   file:writeObject(foo)
+   file:close()
+end
+
+function tests.test_shared_upvalues()
+  if debug.upvalueid then
+     local i=1
+     local j=2
+
+     local func = {}
+
+     func.increment = function()
+        i=i+1
+        j=j+2
+     end
+     func.get_i = function()
+        return i
+     end
+     func.get_j = function()
+        return j
+     end
+
+     local copyFunc = serializeAndDeserialize(func)
+     myTester:assert(copyFunc.get_i()==1)
+     myTester:assert(copyFunc.get_j()==2)
+     copyFunc.increment()
+     myTester:assert(copyFunc.get_i()==2)
+     myTester:assert(copyFunc.get_j()==4)
+  else
+     print('Not running shared upvalues test, as we are in Lua-5.1')
+  end
+end
+
+
 myTester:add(tests)
 myTester:run()
+if myTester.errors[1] then os.exit(1) end
