@@ -2,9 +2,11 @@
 
 MACRO(ADD_TORCH_PACKAGE package src luasrc)
   INCLUDE_DIRECTORIES(${CMAKE_CURRENT_SOURCE_DIR})
+  INCLUDE_DIRECTORIES(${Torch_LUA_INCLUDE_DIR})
 
-  ### C/C++ sources
-  IF(src)      
+ ### C/C++ sources
+ # As per CMake doc, macro arguments are not variables, so simple test syntax not working
+  IF(NOT "${src}" STREQUAL "")
 
     ADD_LIBRARY(${package} MODULE ${src})
     if(BUILD_STATIC)
@@ -16,7 +18,7 @@ MACRO(ADD_TORCH_PACKAGE package src luasrc)
       PREFIX "lib"
       IMPORT_PREFIX "lib"
       INSTALL_NAME_DIR "@executable_path/${Torch_INSTALL_BIN2CPATH}")
-    
+
     IF(APPLE)
       SET_TARGET_PROPERTIES(${package} PROPERTIES
         LINK_FLAGS "-undefined dynamic_lookup")
@@ -32,13 +34,13 @@ MACRO(ADD_TORCH_PACKAGE package src luasrc)
     INSTALL(TARGETS ${package}
       RUNTIME DESTINATION ${Torch_INSTALL_LUA_CPATH_SUBDIR}
       LIBRARY DESTINATION ${Torch_INSTALL_LUA_CPATH_SUBDIR})
-    
-  ENDIF(src)
-  
+
+  ENDIF(NOT "${src}" STREQUAL "")
+
   ### lua sources
-  IF(luasrc)
-    INSTALL(FILES ${luasrc} 
+  IF(NOT "${luasrc}" STREQUAL "")
+    INSTALL(FILES ${luasrc}
       DESTINATION ${Torch_INSTALL_LUA_PATH_SUBDIR}/${package})
-  ENDIF(luasrc)
-    
+  ENDIF(NOT "${luasrc}" STREQUAL "")
+
 ENDMACRO(ADD_TORCH_PACKAGE)

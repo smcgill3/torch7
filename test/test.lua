@@ -439,6 +439,10 @@ for i, v in ipairs{{10}, {5, 5}} do
            x:zero()
            mytester:assert(not x:all(), 'error in all()')
            mytester:assert(not x:any(), 'error in any()')
+           
+           x:fill(2)
+           mytester:assert(x:all(), 'error in all()')
+           mytester:assert(x:any(), 'error in any()')
        end
 end
 
@@ -616,6 +620,23 @@ function torchtest.div()
    mytester:assertlt(err, precision, 'error in torch.div - scalar, non contiguous')
 end
 
+function torchtest.mod()
+   local m1 = torch.Tensor(10,10):uniform(10)
+   local res1 = m1:clone()
+
+   local q = 2.1
+   res1[{ {},3 }]:mod(q)
+
+   local res2 = m1:clone()
+   for i = 1,m1:size(1) do
+      res2[{ i,3 }] = res2[{ i,3 }] % q
+   end
+
+   local err = (res1-res2):abs():max()
+
+   mytester:assertlt(err, precision, 'error in torch.mod - scalar, non contiguous')
+end
+
 function torchtest.mm()
    -- helper function
    local function matrixmultiply(mat1,mat2)
@@ -777,7 +798,7 @@ function torchtest.clamp()
 
    local err = (res1-res2):abs():max()
 
-   mytester:assertlt(err, precision, 'error in torch.div - scalar, non contiguous')
+   mytester:assertlt(err, precision, 'error in torch.clamp - scalar, non contiguous')
 end
 
 function torchtest.pow() -- [res] torch.pow([res,] x)
@@ -930,6 +951,70 @@ function torchtest.cdiv()  -- [res] torch.cdiv([res,] tensor1, tensor2)
       end
    end
    mytester:assertlt(maxerr, precision, 'error in torch.cdiv - non-contiguous')
+end
+
+function torchtest.cmod()  -- [res] torch.cmod([res,] tensor1, tensor2)
+   -- contiguous
+   local m1 = torch.Tensor(10, 10, 10):uniform(10)
+   local m2 = torch.Tensor(10, 10 * 10):uniform(3)
+   local sm1 = m1[{4, {}, {}}]
+   local sm2 = m2[{4, {}}]
+   local res1 = torch.cmod(sm1, sm2)
+   local res2 = res1:clone():zero()
+   for i = 1,sm1:size(1) do
+      for j = 1, sm1:size(2) do
+         local idx1d = (((i-1)*sm1:size(1)))+j
+         res2[i][j] = sm1[i][j] % sm2[idx1d]
+      end
+   end
+   local err = res1:clone():zero()
+   -- find absolute error
+   for i = 1, res1:size(1) do
+      for j = 1, res1:size(2) do
+         err[i][j] = math.abs(res1[i][j] - res2[i][j])
+      end
+   end
+   -- find maximum element of error
+   local maxerr = 0
+   for i = 1, err:size(1) do
+      for j = 1, err:size(2) do
+         if err[i][j] > maxerr then
+            maxerr = err[i][j]
+         end
+      end
+   end
+   mytester:assertlt(maxerr, precision, 'error in torch.cmod - contiguous')
+
+   -- non-contiguous
+   local m1 = torch.Tensor(10, 10, 10):uniform(10)
+   local m2 = torch.Tensor(10 * 10, 10 * 10):uniform(3)
+   local sm1 = m1[{{}, 4, {}}]
+   local sm2 = m2[{{}, 4}]
+   local res1 = torch.cmod(sm1, sm2)
+   local res2 = res1:clone():zero()
+   for i = 1,sm1:size(1) do
+      for j = 1, sm1:size(2) do
+         local idx1d = (((i-1)*sm1:size(1)))+j
+         res2[i][j] = sm1[i][j] % sm2[idx1d]
+      end
+   end
+   local err = res1:clone():zero()
+   -- find absolute error
+   for i = 1, res1:size(1) do
+      for j = 1, res1:size(2) do
+         err[i][j] = math.abs(res1[i][j] - res2[i][j])
+      end
+   end
+   -- find maximum element of error
+   local maxerr = 0
+   for i = 1, err:size(1) do
+      for j = 1, err:size(2) do
+         if err[i][j] > maxerr then
+            maxerr = err[i][j]
+         end
+      end
+   end
+   mytester:assertlt(maxerr, precision, 'error in torch.cmod - non-contiguous')
 end
 
 function torchtest.cmul()  -- [res] torch.cmul([res,] tensor1, tensor2)
@@ -1358,7 +1443,7 @@ function torchtest.topK()
       return sorted:narrow(dim, 1, k), indices:narrow(dim, 1, k)
    end
 
-   local function compareTensors(t, res1, ind1, res2, ind2, msg)
+   local function compareTensors(t, res1, ind1, res2, ind2, dim, msg)
       -- Values should be exactly equivalent
       mytester:assertTensorEq(res1, res2, 0, msg)
 
@@ -1374,10 +1459,10 @@ function torchtest.topK()
    end
 
    local function compare(t, k, dim, dir, msg)
-      local topKVal, topKInd = t:topk(k, dim, dir)
+      local topKVal, topKInd = t:topk(k, dim, dir, true)
       local sortKVal, sortKInd = topKViaSort(t, k, dim, dir)
 
-      compareTensors(t, sortKVal, sortKInd, topKVal, topKInd, msg)
+      compareTensors(t, sortKVal, sortKInd, topKVal, topKInd, dim, msg)
    end
 
    local t = torch.rand(math.random(1, msize),
@@ -2947,6 +3032,10 @@ function torchtest.chunk()
 end
 
 function torchtest.totable()
+  local table0D = {}
+  local tensor0D = torch.Tensor(table0D)
+  mytester:assertTableEq(torch.totable(tensor0D), table0D, 'tensor0D:totable incorrect')
+
   local table1D = {1, 2, 3}
   local tensor1D = torch.Tensor(table1D)
   local storage = torch.Storage(table1D)
