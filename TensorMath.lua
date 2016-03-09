@@ -10,7 +10,7 @@ interface:print([[
 #include "THMath.h"
 #include "luaT.h"
 #include "utils.h"
-                ]])
+]])
 
 -- specific to torch: we generate a 'dispatch' function
 -- first we create a helper function
@@ -51,6 +51,18 @@ static int torch_isnonemptytable(lua_State *L, int idx)
 }
 ]])
 
+
+interface:print([[
+static const void* torch_istensorarray(lua_State *L, int idx)
+{
+  if (!torch_isnonemptytable(L, idx)) return 0;
+
+  lua_checkstack(L, 1);
+  lua_rawgeti(L, 1, 1);
+  return (torch_istensortype(L, luaT_typename(L, -1)));
+}
+]])
+
 interface.dispatchregistry = {}
 function interface:wrap(name, ...)
    -- usual stuff
@@ -71,6 +83,10 @@ static int torch_NAME(lua_State *L)
   }
   else if(narg >= 2 && (tname = torch_istensortype(L, luaT_typename(L, 2)))) /* second? */
   {
+  }
+  else if(narg >= 1 && (tname = torch_istensorarray(L, 1))) /* torch table argument? */
+  {
+    lua_remove(L, -2);
   }
   else if(narg >= 1 && lua_type(L, narg) == LUA_TSTRING
 	  && (tname = torch_istensortype(L, lua_tostring(L, narg)))) /* do we have a valid tensor type string then? */
@@ -698,19 +714,33 @@ static void THTensor_random1__(THTensor *self, THGenerator *gen, long b)
         {{name=Tensor, returned=true},
          {name='Generator', default=true}})
 
-   for _,f in ipairs({{name='geometric'},
-                      {name='bernoulli', a=0.5}}) do
+   wrap("geometric",
+     "THRandom_geometric",
+     {{name="Generator", default=true},
+      {name="double"},
+      {name="double", creturned=true}},
+     cname("geometric"),
+     {{name=Tensor, returned=true},
+      {name="Generator", default=true},
+      {name="double"}})
 
-      wrap(f.name,
-           string.format("THRandom_%s", f.name),
-           {{name='Generator', default=true},
-            {name="double", default=f.a},
-            {name="double", creturned=true}},
-           cname(f.name),
-           {{name=Tensor, returned=true},
-            {name='Generator', default=true},
-            {name="double", default=f.a}})
-   end
+   wrap("bernoulli",
+      "THRandom_bernoulli",
+      {{name="Generator", default=true},
+       {name="double", default=0.5},
+       {name="double", creturned=true}},
+      cname("bernoulli"),
+      {{name=Tensor, returned=true},
+       {name="Generator", default=true},
+       {name="double", default=0.5}},
+      cname("bernoulli_FloatTensor"),
+      {{name=Tensor, returned=true},
+       {name="Generator", default=true},
+       {name="FloatTensor"}},
+      cname("bernoulli_DoubleTensor"),
+      {{name=Tensor, returned=true},
+       {name="Generator", default=true},
+       {name="DoubleTensor"}})
 
    wrap("squeeze",
         cname("squeeze"),
@@ -1015,9 +1045,8 @@ static void THTensor_random1__(THTensor *self, THGenerator *gen, long b)
                             "cos", "acos", "cosh",
                             "sin", "asin", "sinh",
                             "tan", "atan", "tanh",
-                            "sqrt",
-                            "round", "ceil", "floor"}) do
-                            --"abs"}) do
+                            "sqrt", "round", "ceil",
+                            "floor", "trunc", }) do
          wrap(name,
               cname(name),
               {{name=Tensor, default=true, returned=true, method={default='nil'}},
@@ -1027,13 +1056,29 @@ static void THTensor_random1__(THTensor *self, THGenerator *gen, long b)
                {name=real, creturned=true}})
       end
 
-         wrap("abs",
-              cname("abs"),
-              {{name=Tensor, default=true, returned=true, method={default='nil'}},
-               {name=Tensor, method={default=1}}},
-              "fabs",
-              {{name=real},
-               {name=real, creturned=true}})
+      wrap("abs",
+           cname("abs"),
+           {{name=Tensor, default=true, returned=true, method={default='nil'}},
+            {name=Tensor, method={default=1}}},
+           "fabs",
+           {{name=real},
+            {name=real, creturned=true}})
+
+      wrap("frac",
+           cname("frac"),
+           {{name=Tensor, default=true, returned=true, method={default='nil'}},
+            {name=Tensor, method={default=1}}},
+           "TH_frac",
+           {{name=real},
+            {name=real, creturned=true}})
+
+      wrap("rsqrt",
+           cname("rsqrt"),
+           {{name=Tensor, default=true, returned=true, method={default='nil'}},
+            {name=Tensor, method={default=1}}},
+           "TH_rsqrt",
+           {{name=real},
+            {name=real, creturned=true}})
 
       wrap("sigmoid",
            cname("sigmoid"),
@@ -1053,6 +1098,18 @@ static void THTensor_random1__(THTensor *self, THGenerator *gen, long b)
            {{name=Tensor, default=true, returned=true, method={default='nil'}},
             {name=Tensor, method={default=1}}})
 
+      wrap("lerp",
+           cname("lerp"),
+           {{name=Tensor, default=true, returned=true, method={default='nil'}},
+            {name=Tensor, method={default=1}},
+            {name=Tensor},
+            {name=real}},
+           "TH_lerp",
+           {{name=real},
+            {name=real},
+            {name=real},
+            {name=real, creturned=true}})
+
       wrap("atan2",
            cname("atan2"),
            {{name=Tensor, default=true, returned=true, method={default='nil'}},
@@ -1061,8 +1118,7 @@ static void THTensor_random1__(THTensor *self, THGenerator *gen, long b)
            "atan2",
            {{name=real},
             {name=real},
-            {name=real, creturned=true}}
-            )
+            {name=real, creturned=true}})
 
       wrap("pow",
            cname("pow"),
