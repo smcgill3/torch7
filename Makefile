@@ -90,10 +90,11 @@ endif
 
 ifeq ($(OSTYPE),darwin)
 CC=clang
-LD=ld -macosx_version_min 10.10
+LD=ld
 SED=sed -i '' -e
 LDFLAGS= \
 	-undefined dynamic_lookup \
+	-macosx_version_min 10.10 \
 	-framework Accelerate \
 	-lm \
 	-L/usr/local/lib
@@ -101,7 +102,8 @@ CFLAGS+= \
 	-mavx -DUSE_AVX \
 	-msse4.2 -DUSE_SSE4_2 \
 	-msse4.1 -DUSE_SSE4_1 \
-	-FAccelerate
+	-FAccelerate \
+	-mmacosx-version-min=10.10
 else
 LD=g++
 #LDFLAGS=-shared -fpic -lm -lblas -llapack
