@@ -222,7 +222,7 @@ For more than `4` dimensions, you can use a storage as argument: `y = torch.ones
 
 
 <a name="torch.rand"></a>
-### [res] torch.rand([res,] m [,n...]) ###
+### [res] torch.rand([res,] [gen,] m [,n...]) ###
 <a name="torch.rand"></a>
 
 `y = torch.rand(n)` returns a one-dimensional `Tensor` of size `n` filled with random numbers from a uniform distribution on the interval `[0, 1)`.
@@ -231,9 +231,10 @@ For more than `4` dimensions, you can use a storage as argument: `y = torch.ones
 
 For more than 4 dimensions, you can use a storage as argument: `y = torch.rand(torch.LongStorage{m, n, k, l, o})`.
 
+`y = torch.rand(gen, m, n)` returns a `m × n` `Tensor` of random numbers from a uniform distribution on the interval `[0, 1)`, using a non-global random number generator `gen` created by [torch.Generator()](random.md#torch.Generator).
 
 <a name="torch.randn"></a>
-### [res] torch.randn([res,] m [,n...]) ###
+### [res] torch.randn([res,] [gen,] m [,n...]) ###
 <a name="torch.randn"></a>
 
 `y = torch.randn(n)` returns a one-dimensional `Tensor` of size `n` filled with random numbers from a normal distribution with mean zero and variance one.
@@ -242,6 +243,7 @@ For more than 4 dimensions, you can use a storage as argument: `y = torch.rand(t
 
 For more than 4 dimensions, you can use a storage as argument: `y = torch.randn(torch.LongStorage{m, n, k, l, o})`.
 
+`y = torch.randn(gen, m, n)` returns a `m × n` `Tensor` of random numbers from a normal distribution with mean zero and variance one, using a non-global random number generator `gen` created by [torch.Generator()](random.md#torch.Generator).
 
 <a name="torch.range"></a>
 ### [res] torch.range([res,] x, y [,step]) ###
@@ -266,11 +268,12 @@ For more than 4 dimensions, you can use a storage as argument: `y = torch.randn(
 
 
 <a name="torch.randperm"></a>
-### [res] torch.randperm([res,] n) ###
+### [res] torch.randperm([res,] [gen,] n) ###
 <a name="torch.randperm"></a>
 
 `y = torch.randperm(n)` returns a random permutation of integers from 1 to `n`.
 
+`y = torch.randperm(gen, n)` returns a random permutation of integers from 1 to `n`, using a non-global random number generator `gen` created by [torch.Generator()](random.md#torch.Generator).
 
 <a name="torch.reshape"></a>
 ### [res] torch.reshape([res,] x, m [,n...]) ###
@@ -547,6 +550,24 @@ Let `x` be a `Tensor` and `n` a number.
 
 In this section, we explain basic mathematical operations for `Tensor`s.
 
+<a name="torch.Tensor.equal"></a>
+### [boolean] equal([tensor1,] tensor2) ###
+<a name="torch.Tensor.equal"></a>
+
+Returns `true` iff the dimensions and values of `tensor1` and `tensor2` are exactly the same.
+
+```lua
+x = torch.Tensor{1,2,3}
+y = torch.Tensor{1,2,3}
+> x:equal(y)
+true
+
+y = torch.Tensor{1,2,4}
+> x:equal(y)
+false
+```
+
+Note that `a:equal(b)` is more efficient that `a:eq(b):all()` as it avoids allocation of a temporary tensor and can short-circuit.
 
 <a name="torch.add"></a>
 ### [res] torch.add([res,] tensor, value) ###
@@ -2249,7 +2270,7 @@ Note: Irrespective of the original strides, the returned matrices `resb` and `re
 
 `A` and `V` are `m × m` matrices and `e` is a `m` dimensional vector.
 
-This function calculates all eigenvalues (and vectors) of `A` such that `A = V' diag(e) V`.
+This function calculates all eigenvalues (and vectors) of `A` such that `A = V diag(e) V'`.
 
 Third argument defines computation of eigenvectors or eigenvalues only.
 If it is `'N'`, only eigenvalues are computed.
@@ -2321,7 +2342,7 @@ Note: Irrespective of the original strides, the returned matrix `V` will be tran
 
 `A` and `V` are `m × m` matrices and `e` is a `m` dimensional vector.
 
-This function calculates all right eigenvalues (and vectors) of `A` such that `A = V' diag(e) V`.
+This function calculates all right eigenvalues (and vectors) of `A` such that `A = V diag(e) V'`.
 
 Third argument defines computation of eigenvectors or eigenvalues only.
 If it is `'N'`, only eigenvalues are computed.
