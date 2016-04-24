@@ -701,12 +701,29 @@ function torchtest.div()
    mytester:assertlt(err, precision, 'error in torch.div - scalar, non contiguous')
 end
 
-function torchtest.mod()
-   local m1 = torch.Tensor(10,10):uniform(10)
+function torchtest.fmod()
+   local m1 = torch.Tensor(10,10):uniform(-10, 10)
    local res1 = m1:clone()
 
    local q = 2.1
-   res1[{ {},3 }]:mod(q)
+   res1[{ {},3 }]:fmod(q)
+
+   local res2 = m1:clone()
+   for i = 1,m1:size(1) do
+      res2[{ i,3 }] = math.fmod(res2[{ i,3 }], q)
+   end
+
+   local err = (res1-res2):abs():max()
+
+   mytester:assertlt(err, precision, 'error in torch.fmod - scalar, non contiguous')
+end
+
+function torchtest.remainder()
+   local m1 = torch.Tensor(10, 10):uniform(-10, 10)
+   local res1 = m1:clone()
+
+   local q = 2.1
+   res1[{ {},3 }]:remainder(q)
 
    local res2 = m1:clone()
    for i = 1,m1:size(1) do
@@ -715,7 +732,7 @@ function torchtest.mod()
 
    local err = (res1-res2):abs():max()
 
-   mytester:assertlt(err, precision, 'error in torch.mod - scalar, non contiguous')
+   mytester:assertlt(err, precision, 'error in torch.remainder - scalar, non contiguous')
 end
 
 function torchtest.mm()
@@ -1034,18 +1051,18 @@ function torchtest.cdiv()  -- [res] torch.cdiv([res,] tensor1, tensor2)
    mytester:assertlt(maxerr, precision, 'error in torch.cdiv - non-contiguous')
 end
 
-function torchtest.cmod()  -- [res] torch.cmod([res,] tensor1, tensor2)
+function torchtest.cfmod()
    -- contiguous
-   local m1 = torch.Tensor(10, 10, 10):uniform(10)
-   local m2 = torch.Tensor(10, 10 * 10):uniform(3)
+   local m1 = torch.Tensor(10, 10, 10):uniform(-10, 10)
+   local m2 = torch.Tensor(10, 10 * 10):uniform(-3, 3)
    local sm1 = m1[{4, {}, {}}]
    local sm2 = m2[{4, {}}]
-   local res1 = torch.cmod(sm1, sm2)
+   local res1 = torch.cfmod(sm1, sm2)
    local res2 = res1:clone():zero()
    for i = 1,sm1:size(1) do
       for j = 1, sm1:size(2) do
          local idx1d = (((i-1)*sm1:size(1)))+j
-         res2[i][j] = sm1[i][j] % sm2[idx1d]
+         res2[i][j] = math.fmod(sm1[i][j], sm2[idx1d])
       end
    end
    local err = res1:clone():zero()
@@ -1064,14 +1081,47 @@ function torchtest.cmod()  -- [res] torch.cmod([res,] tensor1, tensor2)
          end
       end
    end
-   mytester:assertlt(maxerr, precision, 'error in torch.cmod - contiguous')
+   mytester:assertlt(maxerr, precision, 'error in torch.cfmod - contiguous')
 
    -- non-contiguous
-   local m1 = torch.Tensor(10, 10, 10):uniform(10)
-   local m2 = torch.Tensor(10 * 10, 10 * 10):uniform(3)
+   local m1 = torch.Tensor(10, 10, 10):uniform(-10, 10)
+   local m2 = torch.Tensor(10 * 10, 10 * 10):uniform(-3, 3)
    local sm1 = m1[{{}, 4, {}}]
    local sm2 = m2[{{}, 4}]
-   local res1 = torch.cmod(sm1, sm2)
+   local res1 = torch.cfmod(sm1, sm2)
+   local res2 = res1:clone():zero()
+   for i = 1,sm1:size(1) do
+      for j = 1, sm1:size(2) do
+         local idx1d = (((i-1)*sm1:size(1)))+j
+         res2[i][j] = math.fmod(sm1[i][j], sm2[idx1d])
+      end
+   end
+   local err = res1:clone():zero()
+   -- find absolute error
+   for i = 1, res1:size(1) do
+      for j = 1, res1:size(2) do
+         err[i][j] = math.abs(res1[i][j] - res2[i][j])
+      end
+   end
+   -- find maximum element of error
+   local maxerr = 0
+   for i = 1, err:size(1) do
+      for j = 1, err:size(2) do
+         if err[i][j] > maxerr then
+            maxerr = err[i][j]
+         end
+      end
+   end
+   mytester:assertlt(maxerr, precision, 'error in torch.cfmod - non-contiguous')
+end
+
+function torchtest.cremainder()
+   -- contiguous
+   local m1 = torch.Tensor(10, 10, 10):uniform(-10, 10)
+   local m2 = torch.Tensor(10, 10 * 10):uniform(-3, 3)
+   local sm1 = m1[{4, {}, {}}]
+   local sm2 = m2[{4, {}}]
+   local res1 = torch.cremainder(sm1, sm2)
    local res2 = res1:clone():zero()
    for i = 1,sm1:size(1) do
       for j = 1, sm1:size(2) do
@@ -1095,7 +1145,38 @@ function torchtest.cmod()  -- [res] torch.cmod([res,] tensor1, tensor2)
          end
       end
    end
-   mytester:assertlt(maxerr, precision, 'error in torch.cmod - non-contiguous')
+   mytester:assertlt(maxerr, precision, 'error in torch.cremainder - contiguous')
+
+   -- non-contiguous
+   local m1 = torch.Tensor(10, 10, 10):uniform(-10, 10)
+   local m2 = torch.Tensor(10 * 10, 10 * 10):uniform(-3, 3)
+   local sm1 = m1[{{}, 4, {}}]
+   local sm2 = m2[{{}, 4}]
+   local res1 = torch.cremainder(sm1, sm2)
+   local res2 = res1:clone():zero()
+   for i = 1,sm1:size(1) do
+      for j = 1, sm1:size(2) do
+         local idx1d = (((i-1)*sm1:size(1)))+j
+         res2[i][j] = sm1[i][j] % sm2[idx1d]
+      end
+   end
+   local err = res1:clone():zero()
+   -- find absolute error
+   for i = 1, res1:size(1) do
+      for j = 1, res1:size(2) do
+         err[i][j] = math.abs(res1[i][j] - res2[i][j])
+      end
+   end
+   -- find maximum element of error
+   local maxerr = 0
+   for i = 1, err:size(1) do
+      for j = 1, err:size(2) do
+         if err[i][j] > maxerr then
+            maxerr = err[i][j]
+         end
+      end
+   end
+   mytester:assertlt(maxerr, precision, 'error in torch.cremainder - non-contiguous')
 end
 
 function torchtest.cmul()  -- [res] torch.cmul([res,] tensor1, tensor2)
@@ -2400,6 +2481,20 @@ function torchtest.RNGStateAliasing()
     local also_unused = torch.rand(100000)
     local forked_value = torch.rand(gen, 1000)
     mytester:assertTensorEq(target_value, forked_value, 1e-16, "RNG has not forked correctly.")
+end
+
+function torchtest.serializeGenerator()
+   local generator = torch.Generator()
+   torch.manualSeed(generator, 123)
+   local differentGenerator = torch.Generator()
+   torch.manualSeed(differentGenerator, 124)
+   local serializedGenerator = torch.serialize(generator)
+   local deserializedGenerator = torch.deserialize(serializedGenerator)
+   local generated = torch.random(generator)
+   local differentGenerated = torch.random(differentGenerator)
+   local deserializedGenerated = torch.random(deserializedGenerator)
+   mytester:asserteq(generated, deserializedGenerated, 'torch.Generator changed internal state after being serialized')
+   mytester:assertne(generated, differentGenerated, 'Generators with different random seed should not produce the same output')
 end
 
 function torchtest.testBoxMullerState()
