@@ -55,6 +55,9 @@ ELSE(CMAKE_COMPILER_IS_GNUCC)
   SET(mklthreads "mkl_intel_thread")
   SET(mklifaces  "intel")
   SET(mklrtls "iomp5" "guide")
+  IF (MSVC)
+    SET(mklrtls "libiomp5md")
+  ENDIF (MSVC)
 ENDIF (CMAKE_COMPILER_IS_GNUCC)
 
 # Kernel libraries dynamically loaded
@@ -80,6 +83,10 @@ IF (INTEL_MKL_DIR)
     "${INTEL_MKL_DIR}/include")
   SET(CMAKE_LIBRARY_PATH ${CMAKE_LIBRARY_PATH}
     "${INTEL_MKL_DIR}/lib/${mklvers}")
+  IF (MSVC)
+    SET(CMAKE_LIBRARY_PATH ${CMAKE_LIBRARY_PATH}
+      "${INTEL_MKL_DIR}/lib/${iccvers}")
+  ENDIF (MSVC)
 ENDIF (INTEL_MKL_DIR)
 
 # Try linking multiple libs
@@ -137,6 +144,13 @@ MACRO(CHECK_ALL_LIBRARIES LIBRARIES _name _list _flags)
   ENDIF(_libraries_work)
 ENDMACRO(CHECK_ALL_LIBRARIES)
 
+if(WIN32)
+  set(mkl_m "")
+else(WIN32)
+  set(mkl_m "m")
+endif(WIN32)
+
+
 # Check for version 10/11
 IF (NOT MKL_LIBRARIES)
   SET(MKL_VERSION 1011)
@@ -147,7 +161,7 @@ FOREACH(mklrtl ${mklrtls} "")
       FOREACH(mklthread ${mklthreads})
         IF (NOT MKL_LIBRARIES AND NOT INTEL_MKL_SEQUENTIAL)
           CHECK_ALL_LIBRARIES(MKL_LIBRARIES cblas_sgemm
-            "mkl_${mkliface}${mkl64};${mklthread};mkl_core;${mklrtl};pthread;m" "")
+            "mkl_${mkliface}${mkl64};${mklthread};mkl_core;${mklrtl};pthread;${mkl_m}" "")
         ENDIF (NOT MKL_LIBRARIES AND NOT INTEL_MKL_SEQUENTIAL)          
       ENDFOREACH(mklthread)
     ENDFOREACH(mkl64)
@@ -158,7 +172,7 @@ FOREACH(mklrtl ${mklrtls} "")
     FOREACH(mkl64 ${mkl64s} "")
       IF (NOT MKL_LIBRARIES)
         CHECK_ALL_LIBRARIES(MKL_LIBRARIES cblas_sgemm
-          "mkl_${mkliface}${mkl64};mkl_sequential;mkl_core;m" "")
+          "mkl_${mkliface}${mkl64};mkl_sequential;mkl_core;${mkl_m}" "")
         IF (MKL_LIBRARIES)
           SET(mklseq "_sequential")
         ENDIF (MKL_LIBRARIES)
@@ -172,7 +186,7 @@ FOREACH(mklrtl ${mklrtls} "")
       FOREACH(mklthread ${mklthreads})
         IF (NOT MKL_LIBRARIES)
           CHECK_ALL_LIBRARIES(MKL_LIBRARIES cblas_sgemm
-            "mkl_${mkliface}${mkl64};${mklthread};mkl_core;${mklrtl};pthread;m" "")
+            "mkl_${mkliface}${mkl64};${mklthread};mkl_core;${mklrtl};pthread;${mkl_m}" "")
         ENDIF (NOT MKL_LIBRARIES)          
       ENDFOREACH(mklthread)
     ENDFOREACH(mkl64)
