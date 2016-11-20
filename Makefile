@@ -20,6 +20,7 @@ TORCH_SOURCES=\
 	lib/TH/THRandom.c \
 	lib/TH/THStorage.c \
 	lib/TH/THTensor.c \
+	lib/TH/THVector.c \
 	lib/TH/generic/THBlas.c \
 	lib/TH/generic/THLapack.c \
 	lib/TH/generic/THStorage.c \
@@ -30,29 +31,29 @@ TORCH_SOURCES=\
 	lib/TH/generic/THTensorLapack.c \
 	lib/TH/generic/THTensorMath.c \
 	lib/TH/generic/THTensorRandom.c \
-	lib/TH/generic/THVector.c \
+	lib/TH/generic/THVectorDefault.c \
+	lib/TH/generic/THVectorDispatch.c \
 	lib/TH/generic/simd/convolve.c \
 	lib/TH/generic/simd/convolve5x5_sse.c \
 	lib/TH/generic/simd/convolve5x5_avx.c \
 	lib/luaT/luaT.c \
-  Generator.c \
 	DiskFile.c \
 	File.c \
+	Generator.c \
 	MemoryFile.c \
 	PipeFile.c \
 	Storage.c \
 	Tensor.c \
-	TensorMath.c \
 	TensorOperator.c \
 	Timer.c \
 	init.c \
-	random.c \
-	utils.c
+	utils.c \
+	TensorMath.c \
+	random.c
 
 TORCH_OBJECTS=$(TORCH_SOURCES:.c=.o)
 
 CFLAGS= \
-	-std=c99 -pedantic \
 	-c \
 	-I/usr/local/include \
 	-Ilib/luaT -Ilib/TH -I. \
@@ -60,22 +61,21 @@ CFLAGS= \
 	-fno-stack-protector \
 	-fomit-frame-pointer \
 	-DTH_EXPORTS -DHAVE_MMAP=1 \
-	-DUSE_SSE3 -DUSE_SSE2 -DNDEBUG \
+	-DUSE_SSE3 -DUSE_SSE2 \
+	-DNDEBUG \
 	-DTH_HAVE_THREAD \
 	-DUSE_GCC_ATOMICS=1 \
 	-march=native -mtune=native \
 	-ffast-math \
-	-Werror=implicit-function-declaration -Werror=format
+	-Werror=implicit-function-declaration -Werror=format -Wpedantic
 
 LUA_VERSION=5.1
 LUAJIT_VERSION=2.1
 
 ifeq ($(shell pkg-config --exists luajit && echo 0),0)
-LUA_INC=`pkg-config luajit --cflags-only-I`
-#LUA_LIB=`pkg-config luajit --libs`
+LUA_INC=$(shell pkg-config luajit --cflags-only-I)
 else ifeq ($(shell pkg-config --exists lua$(LUA_VERSION) && echo 0),0)
-LUA_INC=`pkg-config lua$(LUA_VERSION) --cflags-only-I`
-#LUA_LIB=`pkg-config lua$(LUA_VERSION) --libs`
+LUA_INC=$(shell pkg-config lua$(LUA_VERSION) --cflags-only-I)
 else
 LUA_INC = -I/usr/include/lua \
 	-I/usr/include/lua5.1 \
@@ -103,7 +103,7 @@ CFLAGS+= \
 	-msse4.2 -DUSE_SSE4_2 \
 	-msse4.1 -DUSE_SSE4_1 \
 	-FAccelerate \
-	-mmacosx-version-min=10.10
+	-mmacosx-version-min=10.11
 else
 LD=g++
 #LDFLAGS=-shared -fpic -lm -lblas -llapack
@@ -117,8 +117,8 @@ prep:
 	cp lib/TH/THGeneral.h.in lib/TH/THGeneral.h
 	$(SED) 's/cmakedefine/define/g' lib/TH/THGeneral.h
 	$(SED) 's/@TH_INLINE@/inline/g' lib/TH/THGeneral.h
-	$(LUA) -e "package.path = package.path..';ext/?/init.lua;ext/?.lua'" TensorMath.lua TensorMath.c
-	$(LUA) -e "package.path = package.path..';ext/?/init.lua;ext/?.lua'" random.lua random.c
+	$(LUA) TensorMath.lua TensorMath.c
+	$(LUA) random.lua random.c
 
 .c.o:
 	cc $(CFLAGS) $< -o $@
@@ -150,7 +150,7 @@ install: libtorch
 	cp lib/TH/generic/*.h /usr/local/include/torch/TH/generic/
 	mkdir -p /usr/local/include/torch/TH/generic/simd
 	cp lib/TH/generic/simd/*.h /usr/local/include/torch/TH/generic/simd/
-	cp lib/TH/generic/THVector.c /usr/local/include/torch/TH/generic
+#	cp lib/TH/generic/THVector.c /usr/local/include/torch/TH/generic
 else
 # Linux linking and installation
 
@@ -166,5 +166,5 @@ install: libtorch
 	cp lib/TH/*.h /usr/local/include/torch/TH/
 	mkdir -p /usr/local/include/torch/TH/generic/simd/
 	cp lib/TH/generic/simd/*.h /usr/local/include/torch/TH/generic/simd/
-	cp lib/TH/generic/THVector.c /usr/local/include/torch/TH/generic
+#	cp lib/TH/generic/THVector.c /usr/local/include/torch/TH/generic
 endif
