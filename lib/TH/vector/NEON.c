@@ -1,3 +1,4 @@
+#include <stddef.h>
 static void THFloatVector_fill_NEON(float *x, const float c, const ptrdiff_t n) {
   long i = 0;
 

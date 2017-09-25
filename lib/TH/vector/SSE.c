@@ -4,6 +4,8 @@
 #include <intrin.h>
 #endif
 
+#include <stddef.h>
+
 static void THDoubleVector_fill_SSE(double *x, const double c, const ptrdiff_t n) {
   ptrdiff_t i;
   ptrdiff_t off;

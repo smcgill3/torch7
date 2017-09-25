@@ -1,1 +1,8 @@
+*.o
+*.so
+*.dylib
+torch.lua
+TensorMath.c
+random.c
+lib/TH/THGeneral.h
 build/
